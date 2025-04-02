@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import FormError from '@/components/ui/FormError';
 import { useNavigate } from 'react-router-dom';
 import { EyeIcon, EyeOffIcon } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
 
 const departments = [
   'Human Resources',
@@ -69,22 +70,36 @@ const SignupForm = () => {
     }
 
     try {
-      // In a real app, this would be an API call
-      // Simulating a successful registration after a delay
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      // Create user with Supabase auth
+      const { data, error } = await supabase.auth.signUp({
+        email: formData.email,
+        password: formData.password,
+        options: {
+          data: {
+            first_name: formData.firstName,
+            last_name: formData.lastName,
+            job_title: formData.jobTitle,
+            department: formData.department,
+            company_name: formData.companyName,
+          },
+        },
+      });
+
+      if (error) {
+        throw error;
+      }
       
       toast({
         title: 'Account created successfully!',
         description: 'Welcome to HR Management System',
       });
       
-      // Navigate to login page
-      console.log('Registration successful', formData);
+      console.log('Registration successful', data);
       navigate('/login');
       
-    } catch (error) {
+    } catch (error: any) {
       console.error('Registration error:', error);
-      setFormError('Failed to create account. Please try again.');
+      setFormError(error.message || 'Failed to create account. Please try again.');
     } finally {
       setIsLoading(false);
     }

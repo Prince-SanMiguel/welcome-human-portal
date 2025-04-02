@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import FormError from '@/components/ui/FormError';
 import { useNavigate } from 'react-router-dom';
 import { EyeIcon, EyeOffIcon } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
 
 const LoginForm = () => {
   const { toast } = useToast();
@@ -31,7 +32,6 @@ const LoginForm = () => {
     setFormError(null);
     setIsLoading(true);
 
-    // Validate form
     if (!formData.email || !formData.password) {
       setFormError('Please enter both email and password');
       setIsLoading(false);
@@ -39,29 +39,33 @@ const LoginForm = () => {
     }
 
     try {
-      // In a real app, this would be an API call
-      // Simulating a successful login after a delay
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: formData.email,
+        password: formData.password,
+      });
+
+      if (error) {
+        throw error;
+      }
+
       toast({
-        title: 'Logged in successfully!',
+        title: 'Login successful!',
         description: 'Welcome back to HR Management System',
       });
-      
-      // Navigate to dashboard (would be implemented in a full app)
-      console.log('Login successful', formData);
+
+      // Navigate to dashboard or home page
       navigate('/');
       
-    } catch (error) {
+    } catch (error: any) {
       console.error('Login error:', error);
-      setFormError('Invalid email or password');
+      setFormError(error.message || 'Failed to login. Please check your credentials.');
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handleSubmit} className="space-y-6">
       <div className="space-y-2">
         <Label htmlFor="email">Email</Label>
         <Input
@@ -72,20 +76,14 @@ const LoginForm = () => {
           value={formData.email}
           onChange={handleChange}
           disabled={isLoading}
-          className="w-full"
           required
         />
       </div>
 
       <div className="space-y-2">
-        <div className="flex justify-between items-center">
+        <div className="flex items-center justify-between">
           <Label htmlFor="password">Password</Label>
-          <Button 
-            variant="link" 
-            type="button" 
-            className="p-0 h-auto text-sm font-normal text-hr-blue"
-            onClick={() => {/* Would implement forgot password flow */}}
-          >
+          <Button variant="link" className="text-xs font-normal h-auto p-0" type="button">
             Forgot password?
           </Button>
         </div>
@@ -98,7 +96,6 @@ const LoginForm = () => {
             value={formData.password}
             onChange={handleChange}
             disabled={isLoading}
-            className="w-full pr-10"
             required
           />
           <Button
@@ -124,7 +121,7 @@ const LoginForm = () => {
         className="w-full bg-hr-blue hover:bg-hr-blue/90"
         disabled={isLoading}
       >
-        {isLoading ? 'Logging in...' : 'Log in'}
+        {isLoading ? 'Signing in...' : 'Sign in'}
       </Button>
     </form>
   );
