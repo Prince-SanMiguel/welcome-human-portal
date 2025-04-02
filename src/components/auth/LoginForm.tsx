@@ -53,8 +53,8 @@ const LoginForm = () => {
         description: 'Welcome back to HR Management System',
       });
 
-      // Navigate to dashboard or home page
-      navigate('/');
+      // Navigate to dashboard page instead of home
+      navigate('/dashboard');
       
     } catch (error: any) {
       console.error('Login error:', error);

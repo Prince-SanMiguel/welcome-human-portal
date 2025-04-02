@@ -1,9 +1,26 @@
-
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { UserIcon, Users, BarChart4, CalendarDays } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { supabase } from '@/integrations/supabase/client';
 
 const Index = () => {
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+  useEffect(() => {
+    // Check if user is logged in
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setIsLoggedIn(!!session);
+    });
+
+    // Set up auth listener
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      setIsLoggedIn(!!session);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
   return (
     <div className="min-h-screen bg-slate-50">
       {/* Header */}
@@ -14,16 +31,37 @@ const Index = () => {
             <h1 className="text-xl font-bold text-gray-900">HR Management System</h1>
           </div>
           <div className="flex items-center space-x-4">
-            <Link to="/login">
-              <Button variant="ghost" className="text-gray-700 hover:text-hr-blue">
-                Log in
-              </Button>
-            </Link>
-            <Link to="/signup">
-              <Button className="bg-hr-blue hover:bg-hr-blue/90">
-                Sign up
-              </Button>
-            </Link>
+            {isLoggedIn ? (
+              <>
+                <Link to="/dashboard">
+                  <Button variant="ghost" className="text-gray-700 hover:text-hr-blue">
+                    Dashboard
+                  </Button>
+                </Link>
+                <Button 
+                  variant="outline"
+                  onClick={async () => {
+                    await supabase.auth.signOut();
+                    setIsLoggedIn(false);
+                  }}
+                >
+                  Sign out
+                </Button>
+              </>
+            ) : (
+              <>
+                <Link to="/login">
+                  <Button variant="ghost" className="text-gray-700 hover:text-hr-blue">
+                    Log in
+                  </Button>
+                </Link>
+                <Link to="/signup">
+                  <Button className="bg-hr-blue hover:bg-hr-blue/90">
+                    Sign up
+                  </Button>
+                </Link>
+              </>
+            )}
           </div>
         </div>
       </header>
