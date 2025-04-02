@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
 import { Users, Briefcase, Building2, FileSpreadsheet } from 'lucide-react';
+import SearchBar, { FilterOptions } from '@/components/dashboard/SearchBar';
 
 interface Employee {
   empno: string;
@@ -47,8 +48,15 @@ const Dashboard = () => {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [employees, setEmployees] = useState<EmployeeWithDetails[]>([]);
+  const [filteredEmployees, setFilteredEmployees] = useState<EmployeeWithDetails[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [jobs, setJobs] = useState<Job[]>([]);
+  const [filters, setFilters] = useState<FilterOptions>({
+    searchQuery: '',
+    department: '',
+    job: '',
+    gender: '',
+  });
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -75,6 +83,10 @@ const Dashboard = () => {
 
     return () => subscription.unsubscribe();
   }, [navigate]);
+
+  useEffect(() => {
+    applyFilters();
+  }, [filters, employees]);
 
   const fetchData = async () => {
     try {
@@ -126,6 +138,7 @@ const Dashboard = () => {
       });
       
       setEmployees(employeesWithDetails || []);
+      setFilteredEmployees(employeesWithDetails || []);
     } catch (error) {
       console.error('Error fetching data:', error);
       toast({
@@ -136,6 +149,40 @@ const Dashboard = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const applyFilters = () => {
+    let filtered = [...employees];
+    
+    // Apply search query filter
+    if (filters.searchQuery) {
+      const query = filters.searchQuery.toLowerCase();
+      filtered = filtered.filter(employee => {
+        const fullName = `${employee.firstname || ''} ${employee.lastname || ''}`.toLowerCase();
+        return fullName.includes(query) || employee.empno.toLowerCase().includes(query);
+      });
+    }
+    
+    // Apply department filter
+    if (filters.department) {
+      filtered = filtered.filter(employee => employee.department === filters.department);
+    }
+    
+    // Apply job filter
+    if (filters.job) {
+      filtered = filtered.filter(employee => employee.job === filters.job);
+    }
+    
+    // Apply gender filter
+    if (filters.gender) {
+      filtered = filtered.filter(employee => employee.gender === filters.gender);
+    }
+    
+    setFilteredEmployees(filtered);
+  };
+
+  const handleFilterChange = (newFilters: FilterOptions) => {
+    setFilters(newFilters);
   };
 
   const handleSignOut = async () => {
@@ -189,6 +236,13 @@ const Dashboard = () => {
       </header>
 
       <main className="py-8 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        {/* Search and Filter */}
+        <SearchBar 
+          departments={departments}
+          jobs={jobs}
+          onFilterChange={handleFilterChange}
+        />
+        
         {/* Stats Section */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-8">
           <Card>
@@ -242,7 +296,6 @@ const Dashboard = () => {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {/* This would be more accurate from a real count */}
                 {employees.reduce((sum, emp) => sum + (emp.job !== 'Not assigned' ? 1 : 0), 0)}
               </div>
               <p className="text-xs text-muted-foreground">
@@ -275,8 +328,8 @@ const Dashboard = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {employees.length > 0 ? (
-                    employees.map((employee) => (
+                  {filteredEmployees.length > 0 ? (
+                    filteredEmployees.map((employee) => (
                       <TableRow key={employee.empno}>
                         <TableCell className="font-medium">{employee.empno}</TableCell>
                         <TableCell>{`${employee.firstname || ''} ${employee.lastname || ''}`}</TableCell>
@@ -292,7 +345,7 @@ const Dashboard = () => {
                   ) : (
                     <TableRow>
                       <TableCell colSpan={7} className="text-center py-4">
-                        No employees found
+                        No employees found matching your filters
                       </TableCell>
                     </TableRow>
                   )}
@@ -327,7 +380,7 @@ const Dashboard = () => {
                         <TableCell className="font-medium">{dept.deptcode}</TableCell>
                         <TableCell>{dept.deptname || 'Unnamed'}</TableCell>
                         <TableCell className="text-right">
-                          {employees.filter(e => e.department === dept.deptname).length}
+                          {filteredEmployees.filter(e => e.department === dept.deptname).length}
                         </TableCell>
                       </TableRow>
                     ))
