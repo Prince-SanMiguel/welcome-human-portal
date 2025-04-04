@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
@@ -68,6 +69,7 @@ const Dashboard = () => {
   const { toast } = useToast();
 
   useEffect(() => {
+    // Check for active session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       if (!session) {
@@ -77,6 +79,7 @@ const Dashboard = () => {
       }
     });
 
+    // Set up auth listener
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
@@ -99,6 +102,7 @@ const Dashboard = () => {
     try {
       setLoading(true);
       
+      // Fetch departments
       const { data: deptData, error: deptError } = await supabase
         .from('department')
         .select('*');
@@ -107,6 +111,7 @@ const Dashboard = () => {
       setDepartments(deptData || []);
       setFilteredDepartments(deptData || []);
       
+      // Fetch jobs
       const { data: jobData, error: jobError } = await supabase
         .from('job')
         .select('*');
@@ -115,12 +120,14 @@ const Dashboard = () => {
       setJobs(jobData || []);
       setFilteredJobs(jobData || []);
       
+      // Fetch employees
       const { data: empData, error: empError } = await supabase
         .from('employee')
         .select('*');
       
       if (empError) throw empError;
       
+      // Fetch job history to get current positions
       const { data: historyData, error: historyError } = await supabase
         .from('jobhistory')
         .select('*')
@@ -128,6 +135,7 @@ const Dashboard = () => {
       
       if (historyError) throw historyError;
       
+      // Process employee data with job and department information
       const employeesWithDetails = empData?.map((emp) => {
         const latestJob = historyData?.find(h => h.empno === emp.empno);
         const jobInfo = jobData?.find(j => j.jobcode === latestJob?.jobcode);
@@ -141,6 +149,7 @@ const Dashboard = () => {
         };
       });
       
+      // Process job history with employee, job, and department information
       const jobHistoryWithDetails = historyData?.map((hist) => {
         const empInfo = empData?.find(e => e.empno === hist.empno);
         const jobInfo = jobData?.find(j => j.jobcode === hist.jobcode);
@@ -173,6 +182,7 @@ const Dashboard = () => {
   const applyFilters = () => {
     const { searchQuery, department, job, gender, table } = filters;
     
+    // Filter employees
     let filteredEmps = [...employees];
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
@@ -197,6 +207,7 @@ const Dashboard = () => {
       filteredEmps = filteredEmps.filter(employee => employee.gender === gender);
     }
     
+    // Filter departments
     let filteredDepts = [...departments];
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
@@ -206,6 +217,7 @@ const Dashboard = () => {
       );
     }
     
+    // Filter jobs
     let filteredJobsList = [...jobs];
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
@@ -215,6 +227,7 @@ const Dashboard = () => {
       );
     }
     
+    // Filter job history
     let filteredJobHistoryList = [...jobHistory];
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
@@ -236,6 +249,7 @@ const Dashboard = () => {
       filteredJobHistoryList = filteredJobHistoryList.filter(history => history.job_desc === job);
     }
     
+    // Apply table filter
     setFilteredEmployees(table === 'all' || table === 'employees' ? filteredEmps : []);
     setFilteredDepartments(table === 'all' || table === 'departments' ? filteredDepts : []);
     setFilteredJobs(table === 'all' || table === 'jobs' ? filteredJobsList : []);
@@ -268,6 +282,7 @@ const Dashboard = () => {
     return new Date(dateString).toLocaleDateString();
   };
 
+  // Determine which table has search results
   const hasSearchResults = (
     filteredEmployees.length > 0 ||
     filteredDepartments.length > 0 ||
@@ -280,20 +295,28 @@ const Dashboard = () => {
     if (!searchQuery) {
       return (
         <>
+          {/* Employee Table */}
           {renderEmployeeTable()}
-          {renderDepartmentTable()}
+          
+          {/* Job Table */}
           {renderJobTable()}
+          
+          {/* Job History Table */}
           {renderJobHistoryTable()}
+          
+          {/* Department Table */}
+          {renderDepartmentTable()}
         </>
       );
     }
     
+    // Order tables by search results
     return (
       <>
         {filteredEmployees.length > 0 && renderEmployeeTable()}
-        {filteredDepartments.length > 0 && renderDepartmentTable()}
         {filteredJobs.length > 0 && renderJobTable()}
         {filteredJobHistory.length > 0 && renderJobHistoryTable()}
+        {filteredDepartments.length > 0 && renderDepartmentTable()}
         
         {!hasSearchResults && (
           <Card className="mb-8">
@@ -516,6 +539,7 @@ const Dashboard = () => {
 
   return (
     <div className="min-h-screen bg-slate-50">
+      {/* Header */}
       <header className="bg-white shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
           <div className="flex items-center">
@@ -534,12 +558,14 @@ const Dashboard = () => {
       </header>
 
       <main className="py-8 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        {/* Search and Filter */}
         <SearchBar 
           departments={departments}
           jobs={jobs}
           onFilterChange={handleFilterChange}
         />
         
+        {/* Stats Section */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-8">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -601,6 +627,7 @@ const Dashboard = () => {
           </Card>
         </div>
 
+        {/* Tables - Order based on search results */}
         {renderTableOrder()}
       </main>
     </div>

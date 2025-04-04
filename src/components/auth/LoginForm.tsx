@@ -53,12 +53,8 @@ const LoginForm = () => {
         description: 'Welcome back to HR Management System',
       });
 
-      console.log('Login successful, redirecting to dashboard...');
-      
-      // Use a small timeout to ensure the state update completes before navigation
-      setTimeout(() => {
-        navigate('/dashboard', { replace: true });
-      }, 100);
+      // Navigate to dashboard page instead of home
+      navigate('/dashboard');
       
     } catch (error: any) {
       console.error('Login error:', error);
