@@ -1,5 +1,5 @@
-
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useContext } from 'react';
+import { AuthContext } from '../App';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Session } from '@supabase/supabase-js';
@@ -48,8 +48,9 @@ interface EmployeeWithDetails extends Employee {
 }
 
 const Dashboard = () => {
-  const [session, setSession] = useState<Session | null>(null);
+  const { session } = useContext(AuthContext);
   const [loading, setLoading] = useState(true);
+  const [dataError, setDataError] = useState<string | null>(null);
   const [employees, setEmployees] = useState<EmployeeWithDetails[]>([]);
   const [filteredEmployees, setFilteredEmployees] = useState<EmployeeWithDetails[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
@@ -69,28 +70,10 @@ const Dashboard = () => {
   const { toast } = useToast();
 
   useEffect(() => {
-    // Check for active session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      if (!session) {
-        navigate('/login');
-      } else {
-        fetchData();
-      }
-    });
-
-    // Set up auth listener
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
-      setSession(session);
-      if (!session) {
-        navigate('/login');
-      }
-    });
-
-    return () => subscription.unsubscribe();
-  }, [navigate]);
+    if (session) {
+      fetchData();
+    }
+  }, [session]);
 
   useEffect(() => {
     if (departments.length && jobs.length && employees.length && jobHistory.length) {
@@ -101,13 +84,20 @@ const Dashboard = () => {
   const fetchData = async () => {
     try {
       setLoading(true);
+      setDataError(null);
+      console.log("Fetching data...");
       
       // Fetch departments
       const { data: deptData, error: deptError } = await supabase
         .from('department')
         .select('*');
       
-      if (deptError) throw deptError;
+      if (deptError) {
+        console.error("Department fetch error:", deptError);
+        throw deptError;
+      }
+      
+      console.log("Departments fetched:", deptData?.length || 0);
       setDepartments(deptData || []);
       setFilteredDepartments(deptData || []);
       
@@ -116,7 +106,12 @@ const Dashboard = () => {
         .from('job')
         .select('*');
       
-      if (jobError) throw jobError;
+      if (jobError) {
+        console.error("Job fetch error:", jobError);
+        throw jobError;
+      }
+      
+      console.log("Jobs fetched:", jobData?.length || 0);
       setJobs(jobData || []);
       setFilteredJobs(jobData || []);
       
@@ -125,7 +120,12 @@ const Dashboard = () => {
         .from('employee')
         .select('*');
       
-      if (empError) throw empError;
+      if (empError) {
+        console.error("Employee fetch error:", empError);
+        throw empError;
+      }
+      
+      console.log("Employees fetched:", empData?.length || 0);
       
       // Fetch job history to get current positions
       const { data: historyData, error: historyError } = await supabase
@@ -133,7 +133,12 @@ const Dashboard = () => {
         .select('*')
         .order('effdate', { ascending: false });
       
-      if (historyError) throw historyError;
+      if (historyError) {
+        console.error("Job history fetch error:", historyError);
+        throw historyError;
+      }
+      
+      console.log("Job history records fetched:", historyData?.length || 0);
       
       // Process employee data with job and department information
       const employeesWithDetails = empData?.map((emp) => {
@@ -167,11 +172,13 @@ const Dashboard = () => {
       setFilteredEmployees(employeesWithDetails || []);
       setJobHistory(jobHistoryWithDetails || []);
       setFilteredJobHistory(jobHistoryWithDetails || []);
-    } catch (error) {
+      console.log("All data fetched and processed successfully");
+    } catch (error: any) {
       console.error('Error fetching data:', error);
+      setDataError(error.message || 'Failed to load dashboard data');
       toast({
         title: 'Error',
-        description: 'Failed to load dashboard data',
+        description: 'Failed to load dashboard data: ' + (error.message || 'Unknown error'),
         variant: 'destructive',
       });
     } finally {
@@ -267,11 +274,11 @@ const Dashboard = () => {
         title: 'Signed out successfully',
       });
       navigate('/login');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error signing out:', error);
       toast({
         title: 'Error',
-        description: 'Failed to sign out',
+        description: 'Failed to sign out: ' + error.message,
         variant: 'destructive',
       });
     }
@@ -282,7 +289,10 @@ const Dashboard = () => {
     return new Date(dateString).toLocaleDateString();
   };
 
-  // Determine which table has search results
+  const retryFetchData = () => {
+    fetchData();
+  };
+
   const hasSearchResults = (
     filteredEmployees.length > 0 ||
     filteredDepartments.length > 0 ||
@@ -291,6 +301,11 @@ const Dashboard = () => {
   );
 
   const renderTableOrder = () => {
+    console.log("Rendering tables, filtered employees:", filteredEmployees.length);
+    console.log("Rendering tables, filtered jobs:", filteredJobs.length);
+    console.log("Rendering tables, filtered job history:", filteredJobHistory.length);
+    console.log("Rendering tables, filtered departments:", filteredDepartments.length);
+    
     const { searchQuery } = filters;
     if (!searchQuery) {
       return (
@@ -537,6 +552,17 @@ const Dashboard = () => {
     );
   }
 
+  if (dataError) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-4">
+        <div className="text-red-500 text-xl">Error loading dashboard data</div>
+        <div className="text-gray-600 max-w-md text-center">{dataError}</div>
+        <Button onClick={retryFetchData}>Retry</Button>
+        <Button variant="outline" onClick={handleSignOut}>Sign Out</Button>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-50">
       {/* Header */}
@@ -581,6 +607,7 @@ const Dashboard = () => {
               </p>
             </CardContent>
           </Card>
+          
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">
@@ -595,6 +622,7 @@ const Dashboard = () => {
               </p>
             </CardContent>
           </Card>
+          
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">
@@ -609,6 +637,7 @@ const Dashboard = () => {
               </p>
             </CardContent>
           </Card>
+          
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">
