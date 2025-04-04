@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
-import { Users, Briefcase, Building2, FileSpreadsheet } from 'lucide-react';
+import { Users, Briefcase, Building2, FileSpreadsheet, ClipboardList } from 'lucide-react';
 import SearchBar, { FilterOptions } from '@/components/dashboard/SearchBar';
 
 interface Employee {
@@ -26,6 +26,9 @@ interface JobHistory {
   deptcode: string | null;
   effdate: string;
   salary: number | null;
+  employee_name?: string;
+  job_desc?: string;
+  dept_name?: string;
 }
 
 interface Department {
@@ -50,12 +53,17 @@ const Dashboard = () => {
   const [employees, setEmployees] = useState<EmployeeWithDetails[]>([]);
   const [filteredEmployees, setFilteredEmployees] = useState<EmployeeWithDetails[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
+  const [filteredDepartments, setFilteredDepartments] = useState<Department[]>([]);
   const [jobs, setJobs] = useState<Job[]>([]);
+  const [filteredJobs, setFilteredJobs] = useState<Job[]>([]);
+  const [jobHistory, setJobHistory] = useState<JobHistory[]>([]);
+  const [filteredJobHistory, setFilteredJobHistory] = useState<JobHistory[]>([]);
   const [filters, setFilters] = useState<FilterOptions>({
     searchQuery: '',
     department: '',
     job: '',
     gender: '',
+    table: 'all',
   });
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -85,8 +93,10 @@ const Dashboard = () => {
   }, [navigate]);
 
   useEffect(() => {
-    applyFilters();
-  }, [filters, employees]);
+    if (departments.length && jobs.length && employees.length && jobHistory.length) {
+      applyFilters();
+    }
+  }, [filters, employees, departments, jobs, jobHistory]);
 
   const fetchData = async () => {
     try {
@@ -99,6 +109,7 @@ const Dashboard = () => {
       
       if (deptError) throw deptError;
       setDepartments(deptData || []);
+      setFilteredDepartments(deptData || []);
       
       // Fetch jobs
       const { data: jobData, error: jobError } = await supabase
@@ -107,6 +118,7 @@ const Dashboard = () => {
       
       if (jobError) throw jobError;
       setJobs(jobData || []);
+      setFilteredJobs(jobData || []);
       
       // Fetch employees
       const { data: empData, error: empError } = await supabase
@@ -137,8 +149,24 @@ const Dashboard = () => {
         };
       });
       
+      // Process job history with employee, job, and department information
+      const jobHistoryWithDetails = historyData?.map((hist) => {
+        const empInfo = empData?.find(e => e.empno === hist.empno);
+        const jobInfo = jobData?.find(j => j.jobcode === hist.jobcode);
+        const deptInfo = deptData?.find(d => d.deptcode === hist.deptcode);
+        
+        return {
+          ...hist,
+          employee_name: empInfo ? `${empInfo.firstname || ''} ${empInfo.lastname || ''}`.trim() : 'Unknown',
+          job_desc: jobInfo?.jobdesc || 'Unknown',
+          dept_name: deptInfo?.deptname || 'Unknown',
+        };
+      });
+      
       setEmployees(employeesWithDetails || []);
       setFilteredEmployees(employeesWithDetails || []);
+      setJobHistory(jobHistoryWithDetails || []);
+      setFilteredJobHistory(jobHistoryWithDetails || []);
     } catch (error) {
       console.error('Error fetching data:', error);
       toast({
@@ -152,33 +180,80 @@ const Dashboard = () => {
   };
 
   const applyFilters = () => {
-    let filtered = [...employees];
+    const { searchQuery, department, job, gender, table } = filters;
     
-    // Apply search query filter
-    if (filters.searchQuery) {
-      const query = filters.searchQuery.toLowerCase();
-      filtered = filtered.filter(employee => {
+    // Filter employees
+    let filteredEmps = [...employees];
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      filteredEmps = filteredEmps.filter(employee => {
         const fullName = `${employee.firstname || ''} ${employee.lastname || ''}`.toLowerCase();
-        return fullName.includes(query) || employee.empno.toLowerCase().includes(query);
+        return fullName.includes(query) || 
+               employee.empno.toLowerCase().includes(query) || 
+               (employee.department?.toLowerCase() || '').includes(query) ||
+               (employee.job?.toLowerCase() || '').includes(query);
       });
     }
     
-    // Apply department filter
-    if (filters.department) {
-      filtered = filtered.filter(employee => employee.department === filters.department);
+    if (department) {
+      filteredEmps = filteredEmps.filter(employee => employee.department === department);
     }
     
-    // Apply job filter
-    if (filters.job) {
-      filtered = filtered.filter(employee => employee.job === filters.job);
+    if (job) {
+      filteredEmps = filteredEmps.filter(employee => employee.job === job);
     }
     
-    // Apply gender filter
-    if (filters.gender) {
-      filtered = filtered.filter(employee => employee.gender === filters.gender);
+    if (gender) {
+      filteredEmps = filteredEmps.filter(employee => employee.gender === gender);
     }
     
-    setFilteredEmployees(filtered);
+    // Filter departments
+    let filteredDepts = [...departments];
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      filteredDepts = filteredDepts.filter(dept => 
+        dept.deptcode.toLowerCase().includes(query) || 
+        (dept.deptname?.toLowerCase() || '').includes(query)
+      );
+    }
+    
+    // Filter jobs
+    let filteredJobsList = [...jobs];
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      filteredJobsList = filteredJobsList.filter(job => 
+        job.jobcode.toLowerCase().includes(query) || 
+        (job.jobdesc?.toLowerCase() || '').includes(query)
+      );
+    }
+    
+    // Filter job history
+    let filteredJobHistoryList = [...jobHistory];
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      filteredJobHistoryList = filteredJobHistoryList.filter(history => 
+        history.empno.toLowerCase().includes(query) || 
+        history.jobcode.toLowerCase().includes(query) ||
+        (history.employee_name?.toLowerCase() || '').includes(query) ||
+        (history.job_desc?.toLowerCase() || '').includes(query) ||
+        (history.dept_name?.toLowerCase() || '').includes(query) ||
+        (history.salary?.toString() || '').includes(query)
+      );
+    }
+    
+    if (department) {
+      filteredJobHistoryList = filteredJobHistoryList.filter(history => history.dept_name === department);
+    }
+    
+    if (job) {
+      filteredJobHistoryList = filteredJobHistoryList.filter(history => history.job_desc === job);
+    }
+    
+    // Apply table filter
+    setFilteredEmployees(table === 'all' || table === 'employees' ? filteredEmps : []);
+    setFilteredDepartments(table === 'all' || table === 'departments' ? filteredDepts : []);
+    setFilteredJobs(table === 'all' || table === 'jobs' ? filteredJobsList : []);
+    setFilteredJobHistory(table === 'all' || table === 'jobHistory' ? filteredJobHistoryList : []);
   };
 
   const handleFilterChange = (newFilters: FilterOptions) => {
@@ -205,6 +280,253 @@ const Dashboard = () => {
   const formatDate = (dateString: string | null) => {
     if (!dateString) return 'N/A';
     return new Date(dateString).toLocaleDateString();
+  };
+
+  // Determine which table has search results
+  const hasSearchResults = (
+    filteredEmployees.length > 0 ||
+    filteredDepartments.length > 0 ||
+    filteredJobs.length > 0 ||
+    filteredJobHistory.length > 0
+  );
+
+  const renderTableOrder = () => {
+    const { searchQuery } = filters;
+    if (!searchQuery) {
+      return (
+        <>
+          {/* Employee Table */}
+          {renderEmployeeTable()}
+          
+          {/* Job Table */}
+          {renderJobTable()}
+          
+          {/* Job History Table */}
+          {renderJobHistoryTable()}
+          
+          {/* Department Table */}
+          {renderDepartmentTable()}
+        </>
+      );
+    }
+    
+    // Order tables by search results
+    return (
+      <>
+        {filteredEmployees.length > 0 && renderEmployeeTable()}
+        {filteredJobs.length > 0 && renderJobTable()}
+        {filteredJobHistory.length > 0 && renderJobHistoryTable()}
+        {filteredDepartments.length > 0 && renderDepartmentTable()}
+        
+        {!hasSearchResults && (
+          <Card className="mb-8">
+            <CardContent className="p-6 text-center">
+              <p>No results found for "{searchQuery}"</p>
+            </CardContent>
+          </Card>
+        )}
+      </>
+    );
+  };
+
+  const renderEmployeeTable = () => {
+    if (filters.table !== 'all' && filters.table !== 'employees') return null;
+    
+    return (
+      <Card className="mb-8">
+        <CardHeader>
+          <CardTitle>Employee Directory</CardTitle>
+          <CardDescription>
+            Complete list of employees with their current positions
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="rounded-md border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Employee ID</TableHead>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Gender</TableHead>
+                  <TableHead>Hire Date</TableHead>
+                  <TableHead>Department</TableHead>
+                  <TableHead>Position</TableHead>
+                  <TableHead className="text-right">Salary</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredEmployees.length > 0 ? (
+                  filteredEmployees.map((employee) => (
+                    <TableRow key={employee.empno}>
+                      <TableCell className="font-medium">{employee.empno}</TableCell>
+                      <TableCell>{`${employee.firstname || ''} ${employee.lastname || ''}`}</TableCell>
+                      <TableCell>{employee.gender || 'N/A'}</TableCell>
+                      <TableCell>{formatDate(employee.hiredate)}</TableCell>
+                      <TableCell>{employee.department}</TableCell>
+                      <TableCell>{employee.job}</TableCell>
+                      <TableCell className="text-right">
+                        {employee.salary ? `$${employee.salary.toLocaleString()}` : 'N/A'}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={7} className="text-center py-4">
+                      No employees found matching your filters
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  };
+
+  const renderJobTable = () => {
+    if (filters.table !== 'all' && filters.table !== 'jobs') return null;
+    
+    return (
+      <Card className="mb-8">
+        <CardHeader>
+          <CardTitle>Jobs</CardTitle>
+          <CardDescription>
+            List of available job positions
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="rounded-md border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Job Code</TableHead>
+                  <TableHead>Job Description</TableHead>
+                  <TableHead className="text-right">Employees Count</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredJobs.length > 0 ? (
+                  filteredJobs.map((job) => (
+                    <TableRow key={job.jobcode}>
+                      <TableCell className="font-medium">{job.jobcode}</TableCell>
+                      <TableCell>{job.jobdesc || 'Unnamed'}</TableCell>
+                      <TableCell className="text-right">
+                        {employees.filter(e => e.job === job.jobdesc).length}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={3} className="text-center py-4">
+                      No jobs found
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  };
+
+  const renderJobHistoryTable = () => {
+    if (filters.table !== 'all' && filters.table !== 'jobHistory') return null;
+    
+    return (
+      <Card className="mb-8">
+        <CardHeader>
+          <CardTitle>Job History</CardTitle>
+          <CardDescription>
+            Employment records and position changes
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="rounded-md border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Employee</TableHead>
+                  <TableHead>Department</TableHead>
+                  <TableHead>Position</TableHead>
+                  <TableHead>Effective Date</TableHead>
+                  <TableHead className="text-right">Salary</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredJobHistory.length > 0 ? (
+                  filteredJobHistory.map((history, index) => (
+                    <TableRow key={`${history.empno}-${history.jobcode}-${history.effdate}-${index}`}>
+                      <TableCell className="font-medium">{history.employee_name} ({history.empno})</TableCell>
+                      <TableCell>{history.dept_name}</TableCell>
+                      <TableCell>{history.job_desc}</TableCell>
+                      <TableCell>{formatDate(history.effdate)}</TableCell>
+                      <TableCell className="text-right">
+                        {history.salary ? `$${history.salary.toLocaleString()}` : 'N/A'}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center py-4">
+                      No job history records found
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  };
+
+  const renderDepartmentTable = () => {
+    if (filters.table !== 'all' && filters.table !== 'departments') return null;
+    
+    return (
+      <Card className="mb-8">
+        <CardHeader>
+          <CardTitle>Departments</CardTitle>
+          <CardDescription>
+            List of company departments
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="rounded-md border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Department Code</TableHead>
+                  <TableHead>Department Name</TableHead>
+                  <TableHead className="text-right">Employee Count</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredDepartments.length > 0 ? (
+                  filteredDepartments.map((dept) => (
+                    <TableRow key={dept.deptcode}>
+                      <TableCell className="font-medium">{dept.deptcode}</TableCell>
+                      <TableCell>{dept.deptname || 'Unnamed'}</TableCell>
+                      <TableCell className="text-right">
+                        {employees.filter(e => e.department === dept.deptname).length}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={3} className="text-center py-4">
+                      No departments found
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
+    );
   };
 
   if (loading) {
@@ -292,11 +614,11 @@ const Dashboard = () => {
               <CardTitle className="text-sm font-medium">
                 Job History Records
               </CardTitle>
-              <FileSpreadsheet className="h-4 w-4 text-muted-foreground" />
+              <ClipboardList className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {employees.reduce((sum, emp) => sum + (emp.job !== 'Not assigned' ? 1 : 0), 0)}
+                {jobHistory.length}
               </div>
               <p className="text-xs text-muted-foreground">
                 Employment records
@@ -305,97 +627,8 @@ const Dashboard = () => {
           </Card>
         </div>
 
-        {/* Employee Table */}
-        <Card className="mb-8">
-          <CardHeader>
-            <CardTitle>Employee Directory</CardTitle>
-            <CardDescription>
-              Complete list of employees with their current positions
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="rounded-md border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Employee ID</TableHead>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Gender</TableHead>
-                    <TableHead>Hire Date</TableHead>
-                    <TableHead>Department</TableHead>
-                    <TableHead>Position</TableHead>
-                    <TableHead className="text-right">Salary</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredEmployees.length > 0 ? (
-                    filteredEmployees.map((employee) => (
-                      <TableRow key={employee.empno}>
-                        <TableCell className="font-medium">{employee.empno}</TableCell>
-                        <TableCell>{`${employee.firstname || ''} ${employee.lastname || ''}`}</TableCell>
-                        <TableCell>{employee.gender || 'N/A'}</TableCell>
-                        <TableCell>{formatDate(employee.hiredate)}</TableCell>
-                        <TableCell>{employee.department}</TableCell>
-                        <TableCell>{employee.job}</TableCell>
-                        <TableCell className="text-right">
-                          {employee.salary ? `$${employee.salary.toLocaleString()}` : 'N/A'}
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  ) : (
-                    <TableRow>
-                      <TableCell colSpan={7} className="text-center py-4">
-                        No employees found matching your filters
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Department Table */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Departments</CardTitle>
-            <CardDescription>
-              List of company departments
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="rounded-md border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Department Code</TableHead>
-                    <TableHead>Department Name</TableHead>
-                    <TableHead className="text-right">Employee Count</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {departments.length > 0 ? (
-                    departments.map((dept) => (
-                      <TableRow key={dept.deptcode}>
-                        <TableCell className="font-medium">{dept.deptcode}</TableCell>
-                        <TableCell>{dept.deptname || 'Unnamed'}</TableCell>
-                        <TableCell className="text-right">
-                          {filteredEmployees.filter(e => e.department === dept.deptname).length}
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  ) : (
-                    <TableRow>
-                      <TableCell colSpan={3} className="text-center py-4">
-                        No departments found
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </div>
-          </CardContent>
-        </Card>
+        {/* Tables - Order based on search results */}
+        {renderTableOrder()}
       </main>
     </div>
   );
