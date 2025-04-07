@@ -2,8 +2,6 @@
 import React, { useState } from 'react';
 import { Input } from "@/components/ui/input";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
-import { Button } from "@/components/ui/button";
-import { Search, X } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 
 export type FilterOptions = {
@@ -11,7 +9,6 @@ export type FilterOptions = {
   department: string;
   job: string;
   gender: string;
-  table: string;
 };
 
 type SearchBarProps = {
@@ -27,7 +24,6 @@ const SearchBar = ({ departments, jobs, onFilterChange }: SearchBarProps) => {
     department: '',
     job: '',
     gender: '',
-    table: 'all',
   });
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -48,12 +44,12 @@ const SearchBar = ({ departments, jobs, onFilterChange }: SearchBarProps) => {
 
   const resetFilters = () => {
     const resetFilters = {
-      searchQuery: searchQuery,
+      searchQuery: '',
       department: '',
       job: '',
       gender: '',
-      table: 'all',
     };
+    setSearchQuery('');
     setFilters(resetFilters);
     onFilterChange(resetFilters);
   };
@@ -63,39 +59,17 @@ const SearchBar = ({ departments, jobs, onFilterChange }: SearchBarProps) => {
       <CardContent className="p-4">
         <div className="flex flex-col gap-4">
           {/* Search Input */}
-          <div className="flex gap-2">
-            <div className="relative flex-1">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search across all tables..."
-                value={searchQuery}
-                onChange={handleInputChange}
-                className="pl-8"
-              />
-            </div>
+          <div className="relative">
+            <Input
+              placeholder="Search by name or ID..."
+              value={searchQuery}
+              onChange={handleInputChange}
+              className="pl-8"
+            />
           </div>
 
           {/* Filter Options */}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
-            {/* Table Filter */}
-            <div>
-              <Select
-                value={filters.table}
-                onValueChange={(value) => handleFilterChange('table', value)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Filter by Table" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Tables</SelectItem>
-                  <SelectItem value="employees">Employees</SelectItem>
-                  <SelectItem value="departments">Departments</SelectItem>
-                  <SelectItem value="jobs">Jobs</SelectItem>
-                  <SelectItem value="jobHistory">Job History</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div>
               <Select
                 value={filters.department}
@@ -148,13 +122,6 @@ const SearchBar = ({ departments, jobs, onFilterChange }: SearchBarProps) => {
                   <SelectItem value="F">Female</SelectItem>
                 </SelectContent>
               </Select>
-            </div>
-
-            <div className="col-span-1 sm:col-span-4 flex justify-end">
-              <Button variant="ghost" onClick={resetFilters} className="flex items-center gap-2">
-                <X className="h-4 w-4" />
-                Reset Filters
-              </Button>
             </div>
           </div>
         </div>
