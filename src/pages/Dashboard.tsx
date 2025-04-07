@@ -1,8 +1,8 @@
+
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { Session } from '@supabase/supabase-js';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
@@ -47,7 +47,7 @@ interface EmployeeWithDetails extends Employee {
 }
 
 const Dashboard = () => {
-  const [session, setSession] = useState<Session | null>(null);
+  const { signOut } = useAuth();
   const [loading, setLoading] = useState(true);
   const [employees, setEmployees] = useState<EmployeeWithDetails[]>([]);
   const [filteredEmployees, setFilteredEmployees] = useState<EmployeeWithDetails[]>([]);
@@ -64,30 +64,11 @@ const Dashboard = () => {
     gender: '',
     table: 'all',
   });
-  const navigate = useNavigate();
   const { toast } = useToast();
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      if (!session) {
-        navigate('/login');
-      } else {
-        fetchData();
-      }
-    });
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
-      setSession(session);
-      if (!session) {
-        navigate('/login');
-      }
-    });
-
-    return () => subscription.unsubscribe();
-  }, [navigate]);
+    fetchData();
+  }, []);
 
   useEffect(() => {
     if (departments.length && jobs.length && employees.length && jobHistory.length) {
@@ -248,11 +229,10 @@ const Dashboard = () => {
 
   const handleSignOut = async () => {
     try {
-      await supabase.auth.signOut();
+      await signOut();
       toast({
         title: 'Signed out successfully',
       });
-      navigate('/login');
     } catch (error) {
       console.error('Error signing out:', error);
       toast({
@@ -523,9 +503,6 @@ const Dashboard = () => {
             <h1 className="text-xl font-bold text-gray-900">HR Management Dashboard</h1>
           </div>
           <div className="flex items-center space-x-4">
-            <span className="text-sm text-gray-600">
-              {session?.user?.email}
-            </span>
             <Button variant="ghost" onClick={handleSignOut}>
               Sign Out
             </Button>
@@ -601,7 +578,30 @@ const Dashboard = () => {
           </Card>
         </div>
 
-        {renderTableOrder()}
+        {/* Render tables in specific order */}
+        {filters.searchQuery ? (
+          <>
+            {filteredEmployees.length > 0 && renderEmployeeTable()}
+            {filteredDepartments.length > 0 && renderDepartmentTable()}
+            {filteredJobs.length > 0 && renderJobTable()}
+            {filteredJobHistory.length > 0 && renderJobHistoryTable()}
+            
+            {!hasSearchResults && (
+              <Card className="mb-8">
+                <CardContent className="p-6 text-center">
+                  <p>No results found for "{filters.searchQuery}"</p>
+                </CardContent>
+              </Card>
+            )}
+          </>
+        ) : (
+          <>
+            {renderEmployeeTable()}
+            {renderDepartmentTable()}
+            {renderJobTable()}
+            {renderJobHistoryTable()}
+          </>
+        )}
       </main>
     </div>
   );
