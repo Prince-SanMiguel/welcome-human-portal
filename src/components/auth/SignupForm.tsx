@@ -5,10 +5,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import FormError from '@/components/ui/FormError';
 import { useNavigate } from 'react-router-dom';
 import { EyeIcon, EyeOffIcon } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { UserRole } from '@/context/AuthContext';
 
 const departments = [
   'Human Resources',
@@ -35,6 +37,7 @@ const SignupForm = () => {
     jobTitle: '',
     department: '',
     companyName: '',
+    role: 'employee' as UserRole,
   });
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -48,6 +51,13 @@ const SignupForm = () => {
     setFormData({
       ...formData,
       department: value,
+    });
+  };
+
+  const handleRoleChange = (value: UserRole) => {
+    setFormData({
+      ...formData,
+      role: value,
     });
   };
 
@@ -81,12 +91,27 @@ const SignupForm = () => {
             job_title: formData.jobTitle,
             department: formData.department,
             company_name: formData.companyName,
+            // Don't store role in user metadata for security reasons
           },
         },
       });
 
       if (error) {
         throw error;
+      }
+      
+      // Save user role to the user_roles table
+      if (data.user) {
+        const { error: roleError } = await supabase
+          .from('user_roles')
+          .insert({
+            user_id: data.user.id,
+            role: formData.role,
+          });
+
+        if (roleError) {
+          throw roleError;
+        }
       }
       
       toast({
@@ -181,6 +206,29 @@ const SignupForm = () => {
         <p className="text-xs text-gray-500">
           Must be at least 8 characters
         </p>
+      </div>
+      
+      <div className="space-y-2">
+        <Label>User Role *</Label>
+        <RadioGroup 
+          defaultValue="employee" 
+          value={formData.role}
+          onValueChange={(value) => handleRoleChange(value as UserRole)}
+          className="flex flex-col sm:flex-row gap-6 pt-2"
+        >
+          <div className="flex items-center space-x-2">
+            <RadioGroupItem value="employee" id="employee" />
+            <Label htmlFor="employee" className="cursor-pointer">Employee</Label>
+          </div>
+          <div className="flex items-center space-x-2">
+            <RadioGroupItem value="manager" id="manager" />
+            <Label htmlFor="manager" className="cursor-pointer">Manager</Label>
+          </div>
+          <div className="flex items-center space-x-2">
+            <RadioGroupItem value="admin" id="admin" />
+            <Label htmlFor="admin" className="cursor-pointer">Admin</Label>
+          </div>
+        </RadioGroup>
       </div>
       
       <div className="space-y-2">

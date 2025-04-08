@@ -33,6 +33,8 @@ const App = () => (
             <Route path="/" element={<Index />} />
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />
+            
+            {/* Base dashboard accessible to all authenticated users */}
             <Route 
               path="/dashboard" 
               element={
@@ -41,6 +43,35 @@ const App = () => (
                 </ProtectedRoute>
               } 
             />
+            
+            {/* Role-specific routes */}
+            <Route 
+              path="/employee/*" 
+              element={
+                <ProtectedRoute requiredRole="employee">
+                  <Dashboard />
+                </ProtectedRoute>
+              } 
+            />
+            
+            <Route 
+              path="/manager/*" 
+              element={
+                <ProtectedRoute requiredRole="manager">
+                  <Dashboard />
+                </ProtectedRoute>
+              } 
+            />
+            
+            <Route 
+              path="/admin/*" 
+              element={
+                <ProtectedRoute requiredRole="admin">
+                  <Dashboard />
+                </ProtectedRoute>
+              } 
+            />
+            
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AuthProvider>
