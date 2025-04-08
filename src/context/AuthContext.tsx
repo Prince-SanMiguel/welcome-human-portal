@@ -32,18 +32,17 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   // Function to fetch user role
   const fetchUserRole = async (userId: string) => {
     try {
+      // Using raw SQL query instead of from() to avoid TypeScript errors
+      // until the types are regenerated
       const { data, error } = await supabase
-        .from('user_roles')
-        .select('role')
-        .eq('user_id', userId)
-        .single();
+        .rpc('get_user_role', { user_id_param: userId });
 
       if (error) {
         console.error('Error fetching user role:', error);
         return null;
       }
 
-      return data?.role as UserRole;
+      return data as UserRole;
     } catch (error) {
       console.error('Failed to fetch user role:', error);
       return null;

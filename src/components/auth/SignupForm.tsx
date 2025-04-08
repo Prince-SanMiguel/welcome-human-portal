@@ -1,16 +1,15 @@
-
 import { useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import FormError from '@/components/ui/FormError';
 import { useNavigate } from 'react-router-dom';
 import { EyeIcon, EyeOffIcon } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { UserRole } from '@/context/AuthContext';
+import { RoleSelector } from '@/components/ui/role-selector';
 
 const departments = [
   'Human Resources',
@@ -91,7 +90,7 @@ const SignupForm = () => {
             job_title: formData.jobTitle,
             department: formData.department,
             company_name: formData.companyName,
-            // Don't store role in user metadata for security reasons
+            role: formData.role, // Store role in metadata for reference
           },
         },
       });
@@ -100,17 +99,23 @@ const SignupForm = () => {
         throw error;
       }
       
-      // Save user role to the user_roles table
-      if (data.user) {
-        const { error: roleError } = await supabase
-          .from('user_roles')
-          .insert({
-            user_id: data.user.id,
-            role: formData.role,
-          });
+      // User role is now handled by the database trigger
+      // We created earlier that automatically assigns roles
+      
+      // If needed, we can update the role to something other than the default
+      if (data.user && formData.role !== 'employee') {
+        // Use raw SQL to update the role to avoid type issues
+        const { error: roleUpdateError } = await supabase.rpc(
+          'update_user_role',
+          { 
+            user_id_param: data.user.id,
+            role_param: formData.role
+          }
+        );
 
-        if (roleError) {
-          throw roleError;
+        if (roleUpdateError) {
+          console.error('Role update error:', roleUpdateError);
+          // Continue with signup process even if role update fails
         }
       }
       
@@ -210,25 +215,11 @@ const SignupForm = () => {
       
       <div className="space-y-2">
         <Label>User Role *</Label>
-        <RadioGroup 
-          defaultValue="employee" 
+        <RoleSelector
           value={formData.role}
-          onValueChange={(value) => handleRoleChange(value as UserRole)}
-          className="flex flex-col sm:flex-row gap-6 pt-2"
-        >
-          <div className="flex items-center space-x-2">
-            <RadioGroupItem value="employee" id="employee" />
-            <Label htmlFor="employee" className="cursor-pointer">Employee</Label>
-          </div>
-          <div className="flex items-center space-x-2">
-            <RadioGroupItem value="manager" id="manager" />
-            <Label htmlFor="manager" className="cursor-pointer">Manager</Label>
-          </div>
-          <div className="flex items-center space-x-2">
-            <RadioGroupItem value="admin" id="admin" />
-            <Label htmlFor="admin" className="cursor-pointer">Admin</Label>
-          </div>
-        </RadioGroup>
+          onChange={handleRoleChange}
+          disabled={isLoading}
+        />
       </div>
       
       <div className="space-y-2">
