@@ -9,8 +9,6 @@ import FormError from '@/components/ui/FormError';
 import { useNavigate } from 'react-router-dom';
 import { EyeIcon, EyeOffIcon } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
-import { UserRole } from '@/context/AuthContext';
-import { RoleSelector } from '@/components/ui/role-selector';
 
 const departments = [
   'Human Resources',
@@ -37,7 +35,6 @@ const SignupForm = () => {
     jobTitle: '',
     department: '',
     companyName: '',
-    role: 'employee' as UserRole,
   });
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -51,13 +48,6 @@ const SignupForm = () => {
     setFormData({
       ...formData,
       department: value,
-    });
-  };
-
-  const handleRoleChange = (value: UserRole) => {
-    setFormData({
-      ...formData,
-      role: value,
     });
   };
 
@@ -91,33 +81,12 @@ const SignupForm = () => {
             job_title: formData.jobTitle,
             department: formData.department,
             company_name: formData.companyName,
-            role: formData.role, // Store role in metadata for reference
           },
         },
       });
 
       if (error) {
         throw error;
-      }
-      
-      // User role is now handled by the database trigger
-      // We created earlier that automatically assigns roles
-      
-      // If needed, we can update the role to something other than the default
-      if (data.user && formData.role !== 'employee') {
-        // Use RPC function to update the role
-        const { error: roleUpdateError } = await supabase.rpc(
-          'update_user_role',
-          { 
-            user_id_param: data.user.id,
-            role_param: formData.role
-          }
-        );
-
-        if (roleUpdateError) {
-          console.error('Role update error:', roleUpdateError);
-          // Continue with signup process even if role update fails
-        }
       }
       
       toast({
@@ -212,15 +181,6 @@ const SignupForm = () => {
         <p className="text-xs text-gray-500">
           Must be at least 8 characters
         </p>
-      </div>
-      
-      <div className="space-y-2">
-        <Label>User Role *</Label>
-        <RoleSelector
-          value={formData.role}
-          onChange={handleRoleChange}
-          disabled={isLoading}
-        />
       </div>
       
       <div className="space-y-2">
