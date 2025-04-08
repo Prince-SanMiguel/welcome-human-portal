@@ -5,10 +5,11 @@ import { useAuth } from '@/context/AuthContext';
 
 type ProtectedRouteProps = {
   children: React.ReactNode;
+  requiredRoles?: Array<'employee' | 'manager' | 'admin'>;
 };
 
-const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
-  const { session, isLoading } = useAuth();
+const ProtectedRoute = ({ children, requiredRoles }: ProtectedRouteProps) => {
+  const { session, isLoading, userRole } = useAuth();
   const location = useLocation();
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
 
@@ -33,6 +34,12 @@ const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
     // Redirect to the login page, but save the current location
     console.log("No session detected, redirecting to login");
     return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  // Check role requirements if specified
+  if (requiredRoles && userRole && !requiredRoles.includes(userRole)) {
+    console.log(`User role ${userRole} does not have permission to access this page`);
+    return <Navigate to="/dashboard" replace />;
   }
 
   console.log("Session detected, rendering protected content");
