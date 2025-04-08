@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
@@ -104,7 +105,7 @@ const SignupForm = () => {
       
       // If needed, we can update the role to something other than the default
       if (data.user && formData.role !== 'employee') {
-        // Use raw SQL to update the role to avoid type issues
+        // Use RPC function to update the role
         const { error: roleUpdateError } = await supabase.rpc(
           'update_user_role',
           { 
