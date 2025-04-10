@@ -28,13 +28,13 @@ import {
   updateLeaveRequest 
 } from '@/utils/databaseHelpers';
 import { AttendanceRecord, LeaveRequest } from '@/types/database';
+import { supabase } from '@/integrations/supabase/client';
 
 const EmployeeDashboard = () => {
   const { session, signOut, userRole } = useAuth();
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState('personal-info');
   
-  // State for editing mode
   const [isEditing, setIsEditing] = useState(false);
   const [userData, setUserData] = useState({
     email: session?.user.email || '',
@@ -42,25 +42,20 @@ const EmployeeDashboard = () => {
     username: session?.user.user_metadata?.username || ''
   });
 
-  // State for delete confirmation dialog
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
-  // State for attendance
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
   const [isClockedIn, setIsClockedIn] = useState(false);
   const [todayAttendance, setTodayAttendance] = useState<AttendanceRecord | null>(null);
   const [isLoadingAttendance, setIsLoadingAttendance] = useState(true);
 
-  // State for leave requests
   const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
   const [isLoadingLeaveRequests, setIsLoadingLeaveRequests] = useState(true);
   const [isLeaveDialogOpen, setIsLeaveDialogOpen] = useState(false);
 
-  // Determine the display name (username or first part of email)
   const displayName = userData.username || 
     (session?.user.email?.split('@')[0] || 'User');
 
-  // Form validation schema for new leave request
   const leaveRequestSchema = z.object({
     type: z.string({ required_error: "Please select a leave type" }),
     startDate: z.string({ required_error: "Start date is required" }),
@@ -68,7 +63,6 @@ const EmployeeDashboard = () => {
     reason: z.string().optional(),
   });
 
-  // Create form
   const leaveForm = useForm({
     resolver: zodResolver(leaveRequestSchema),
     defaultValues: {
@@ -79,7 +73,6 @@ const EmployeeDashboard = () => {
     },
   });
 
-  // Fetch attendance records
   const loadAttendanceRecords = async () => {
     if (!session?.user.id) return;
     
@@ -89,7 +82,6 @@ const EmployeeDashboard = () => {
       const data = await fetchAttendanceRecords(session.user.id);
       setAttendanceRecords(data || []);
 
-      // Check if user is already clocked in today
       const today = format(new Date(), 'yyyy-MM-dd');
       const todayRecord = data?.find(record => 
         format(new Date(record.date), 'yyyy-MM-dd') === today
@@ -109,7 +101,6 @@ const EmployeeDashboard = () => {
     }
   };
 
-  // Fetch leave requests
   const loadLeaveRequests = async () => {
     if (!session?.user.id) return;
     
@@ -158,7 +149,6 @@ const EmployeeDashboard = () => {
 
   const handleEditToggle = () => {
     if (isEditing) {
-      // If we're canceling editing, reset the form data
       setUserData({
         email: session?.user.email || '',
         fullName: session?.user.user_metadata?.full_name || '',
@@ -178,7 +168,6 @@ const EmployeeDashboard = () => {
 
   const handleSaveChanges = async () => {
     try {
-      // Update user_metadata
       const { data, error } = await supabase.auth.updateUser({
         data: { 
           full_name: userData.fullName,
@@ -206,7 +195,6 @@ const EmployeeDashboard = () => {
 
   const handleDeleteUsername = async () => {
     try {
-      // Update user_metadata, removing the username field
       const { data, error } = await supabase.auth.updateUser({
         data: { 
           username: null
@@ -215,7 +203,6 @@ const EmployeeDashboard = () => {
 
       if (error) throw error;
 
-      // Update local state
       setUserData({
         ...userData,
         username: ''
@@ -237,7 +224,6 @@ const EmployeeDashboard = () => {
     }
   };
 
-  // Clock in/out functions
   const handleClockIn = async () => {
     if (!session?.user.id) return;
     
@@ -245,14 +231,12 @@ const EmployeeDashboard = () => {
       const now = new Date().toISOString();
       
       if (todayAttendance) {
-        // Update existing record
         const updatedRecord = await updateAttendanceRecord(todayAttendance.id, { 
           clock_in: now
         });
         
         setTodayAttendance(updatedRecord);
       } else {
-        // Create new record
         const newRecord = await createAttendanceRecord({
           user_id: session.user.id,
           clock_in: now,
@@ -311,7 +295,6 @@ const EmployeeDashboard = () => {
     }
   };
 
-  // Leave request functions
   const onSubmitLeaveRequest = async (values) => {
     if (!session?.user.id) return;
     
@@ -363,19 +346,16 @@ const EmployeeDashboard = () => {
     }
   };
 
-  // Helper function to format date
   const formatDate = (dateString) => {
     if (!dateString) return '-';
     return format(new Date(dateString), 'MMM dd, yyyy');
   };
 
-  // Helper function to format time
   const formatTime = (timeString) => {
     if (!timeString) return '-';
     return format(new Date(timeString), 'h:mm a');
   };
 
-  // Status badge rendering
   const renderStatusBadge = (status) => {
     switch (status?.toLowerCase()) {
       case 'pending':
