@@ -22,6 +22,9 @@ const EmployeeDashboard = () => {
     username: session?.user.user_metadata?.username || ''
   });
 
+  // State for delete confirmation dialog
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+
   // Determine the display name (username or first part of email)
   const displayName = userData.username || 
     (session?.user.email?.split('@')[0] || 'User');
