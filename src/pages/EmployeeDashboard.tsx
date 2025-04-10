@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -7,12 +6,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import {
   User, Calendar, Clock, FileText, PenLine, Save, X,
-  CheckCircle, AlertCircle, CalendarPlus, ClockCheck
+  CheckCircle, AlertCircle, CalendarPlus, CheckCheck
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { supabase } from '@/integrations/supabase/client';
-import { format } from 'date-fns';
 import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -21,6 +18,16 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { format } from 'date-fns';
+import { 
+  fetchAttendanceRecords, 
+  createAttendanceRecord, 
+  updateAttendanceRecord, 
+  fetchLeaveRequests, 
+  createLeaveRequest, 
+  updateLeaveRequest 
+} from '@/utils/databaseHelpers';
+import { AttendanceRecord, LeaveRequest } from '@/types/database';
 
 const EmployeeDashboard = () => {
   const { session, signOut, userRole } = useAuth();
@@ -39,13 +46,13 @@ const EmployeeDashboard = () => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   // State for attendance
-  const [attendanceRecords, setAttendanceRecords] = useState([]);
+  const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
   const [isClockedIn, setIsClockedIn] = useState(false);
-  const [todayAttendance, setTodayAttendance] = useState(null);
+  const [todayAttendance, setTodayAttendance] = useState<AttendanceRecord | null>(null);
   const [isLoadingAttendance, setIsLoadingAttendance] = useState(true);
 
   // State for leave requests
-  const [leaveRequests, setLeaveRequests] = useState([]);
+  const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
   const [isLoadingLeaveRequests, setIsLoadingLeaveRequests] = useState(true);
   const [isLeaveDialogOpen, setIsLeaveDialogOpen] = useState(false);
 
@@ -73,17 +80,13 @@ const EmployeeDashboard = () => {
   });
 
   // Fetch attendance records
-  const fetchAttendanceRecords = async () => {
+  const loadAttendanceRecords = async () => {
+    if (!session?.user.id) return;
+    
     try {
       setIsLoadingAttendance(true);
-      const { data, error } = await supabase
-        .from('attendance')
-        .select('*')
-        .order('date', { ascending: false })
-        .limit(10);
-
-      if (error) throw error;
-
+      
+      const data = await fetchAttendanceRecords(session.user.id);
       setAttendanceRecords(data || []);
 
       // Check if user is already clocked in today
@@ -92,8 +95,8 @@ const EmployeeDashboard = () => {
         format(new Date(record.date), 'yyyy-MM-dd') === today
       );
       
-      setTodayAttendance(todayRecord);
-      setIsClockedIn(todayRecord && todayRecord.clock_in && !todayRecord.clock_out);
+      setTodayAttendance(todayRecord || null);
+      setIsClockedIn(Boolean(todayRecord && todayRecord.clock_in && !todayRecord.clock_out));
     } catch (error) {
       console.error('Error fetching attendance:', error);
       toast({
@@ -107,16 +110,13 @@ const EmployeeDashboard = () => {
   };
 
   // Fetch leave requests
-  const fetchLeaveRequests = async () => {
+  const loadLeaveRequests = async () => {
+    if (!session?.user.id) return;
+    
     try {
       setIsLoadingLeaveRequests(true);
-      const { data, error } = await supabase
-        .from('leave_requests')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-
+      
+      const data = await fetchLeaveRequests(session.user.id);
       setLeaveRequests(data || []);
     } catch (error) {
       console.error('Error fetching leave requests:', error);
@@ -133,9 +133,9 @@ const EmployeeDashboard = () => {
   useEffect(() => {
     if (session) {
       if (activeTab === 'attendance') {
-        fetchAttendanceRecords();
+        loadAttendanceRecords();
       } else if (activeTab === 'leave-requests') {
-        fetchLeaveRequests();
+        loadLeaveRequests();
       }
     }
   }, [session, activeTab]);
@@ -239,31 +239,28 @@ const EmployeeDashboard = () => {
 
   // Clock in/out functions
   const handleClockIn = async () => {
+    if (!session?.user.id) return;
+    
     try {
       const now = new Date().toISOString();
       
       if (todayAttendance) {
         // Update existing record
-        const { error } = await supabase
-          .from('attendance')
-          .update({ 
-            clock_in: now, 
-            updated_at: now 
-          })
-          .eq('id', todayAttendance.id);
+        const updatedRecord = await updateAttendanceRecord(todayAttendance.id, { 
+          clock_in: now
+        });
         
-        if (error) throw error;
+        setTodayAttendance(updatedRecord);
       } else {
         // Create new record
-        const { error } = await supabase
-          .from('attendance')
-          .insert({
-            clock_in: now,
-            date: format(new Date(), 'yyyy-MM-dd'),
-            status: 'present'
-          });
+        const newRecord = await createAttendanceRecord({
+          user_id: session.user.id,
+          clock_in: now,
+          date: format(new Date(), 'yyyy-MM-dd'),
+          status: 'present'
+        });
         
-        if (error) throw error;
+        setTodayAttendance(newRecord);
       }
       
       toast({
@@ -272,7 +269,7 @@ const EmployeeDashboard = () => {
       });
       
       setIsClockedIn(true);
-      fetchAttendanceRecords();
+      loadAttendanceRecords();
     } catch (error) {
       console.error('Error clocking in:', error);
       toast({
@@ -291,15 +288,11 @@ const EmployeeDashboard = () => {
       
       const now = new Date().toISOString();
       
-      const { error } = await supabase
-        .from('attendance')
-        .update({
-          clock_out: now,
-          updated_at: now
-        })
-        .eq('id', todayAttendance.id);
+      const updatedRecord = await updateAttendanceRecord(todayAttendance.id, {
+        clock_out: now
+      });
       
-      if (error) throw error;
+      setTodayAttendance(updatedRecord);
       
       toast({
         title: 'Clocked Out',
@@ -307,7 +300,7 @@ const EmployeeDashboard = () => {
       });
       
       setIsClockedIn(false);
-      fetchAttendanceRecords();
+      loadAttendanceRecords();
     } catch (error) {
       console.error('Error clocking out:', error);
       toast({
@@ -320,18 +313,17 @@ const EmployeeDashboard = () => {
 
   // Leave request functions
   const onSubmitLeaveRequest = async (values) => {
+    if (!session?.user.id) return;
+    
     try {
-      const { error } = await supabase
-        .from('leave_requests')
-        .insert({
-          type: values.type,
-          start_date: values.startDate,
-          end_date: values.endDate,
-          reason: values.reason,
-          status: 'pending'
-        });
-
-      if (error) throw error;
+      await createLeaveRequest({
+        user_id: session.user.id,
+        type: values.type,
+        start_date: values.startDate,
+        end_date: values.endDate,
+        reason: values.reason,
+        status: 'pending'
+      });
 
       toast({
         title: 'Leave Request Submitted',
@@ -339,7 +331,7 @@ const EmployeeDashboard = () => {
       });
 
       setIsLeaveDialogOpen(false);
-      fetchLeaveRequests();
+      loadLeaveRequests();
       leaveForm.reset();
     } catch (error) {
       console.error('Error submitting leave request:', error);
@@ -353,19 +345,14 @@ const EmployeeDashboard = () => {
 
   const handleCancelLeaveRequest = async (id) => {
     try {
-      const { error } = await supabase
-        .from('leave_requests')
-        .update({ status: 'cancelled' })
-        .eq('id', id);
-
-      if (error) throw error;
+      await updateLeaveRequest(id, { status: 'cancelled' });
 
       toast({
         title: 'Leave Request Cancelled',
         description: 'Your leave request has been cancelled',
       });
 
-      fetchLeaveRequests();
+      loadLeaveRequests();
     } catch (error) {
       console.error('Error cancelling leave request:', error);
       toast({
@@ -378,6 +365,7 @@ const EmployeeDashboard = () => {
 
   // Helper function to format date
   const formatDate = (dateString) => {
+    if (!dateString) return '-';
     return format(new Date(dateString), 'MMM dd, yyyy');
   };
 
@@ -585,7 +573,7 @@ const EmployeeDashboard = () => {
                           className="flex items-center gap-2"
                           disabled={isLoadingAttendance}
                         >
-                          <ClockCheck className="h-4 w-4" /> Clock Out
+                          <CheckCheck className="h-4 w-4" /> Clock Out
                         </Button>
                       )}
                     </div>

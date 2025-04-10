@@ -9,6 +9,15 @@ interface UserProfile {
   full_name?: string | null;
 }
 
+interface AdminUser {
+  id: string;
+  email?: string | null;
+  user_metadata?: {
+    username?: string | null;
+    full_name?: string | null;
+  };
+}
+
 /**
  * Custom hook to fetch user profiles for displaying user information
  * This is necessary because we can't directly join with auth.users
@@ -34,7 +43,7 @@ export const useProfilesJoin = (userIds: string[]) => {
         if (error) throw error;
         
         // Create a map of user ID to profile data
-        const profileMap = data.users.reduce((acc, user) => {
+        const profileMap = (data?.users || []).reduce((acc, user: AdminUser) => {
           if (userIds.includes(user.id)) {
             acc[user.id] = {
               id: user.id,

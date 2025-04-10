@@ -10,12 +10,10 @@ import {
   Users, Calendar, ClipboardList, CheckCircle, 
   X, Pencil, Search, CheckCheck, AlertTriangle
 } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
@@ -32,6 +30,15 @@ import {
   AlertDialogHeader,
   AlertDialogTitle
 } from '@/components/ui/alert-dialog';
+import { useProfilesJoin } from '@/hooks/useProfilesJoin';
+import { 
+  fetchAttendanceRecords, 
+  updateAttendanceRecord, 
+  deleteAttendanceRecord, 
+  fetchLeaveRequests, 
+  updateLeaveRequest 
+} from '@/utils/databaseHelpers';
+import { AttendanceRecord, LeaveRequest } from '@/types/database';
 
 const ManagerDashboard = () => {
   const { session, signOut, userRole } = useAuth();
@@ -39,16 +46,25 @@ const ManagerDashboard = () => {
   const [activeTab, setActiveTab] = useState('attendance');
 
   // State for attendance
-  const [attendanceRecords, setAttendanceRecords] = useState([]);
+  const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
   const [isLoadingAttendance, setIsLoadingAttendance] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [editAttendanceDialog, setEditAttendanceDialog] = useState(false);
-  const [currentAttendance, setCurrentAttendance] = useState(null);
+  const [currentAttendance, setCurrentAttendance] = useState<AttendanceRecord | null>(null);
   const [deleteAttendanceDialog, setDeleteAttendanceDialog] = useState(false);
 
   // State for leave requests
-  const [leaveRequests, setLeaveRequests] = useState([]);
+  const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
   const [isLoadingLeaveRequests, setIsLoadingLeaveRequests] = useState(true);
+
+  // Load user profiles for attendance and leave requests
+  const uniqueUserIds = [
+    ...new Set([
+      ...attendanceRecords.map(record => record.user_id),
+      ...leaveRequests.map(request => request.user_id)
+    ])
+  ];
+  const { profiles, isLoading: isLoadingProfiles } = useProfilesJoin(uniqueUserIds);
 
   // Attendance form schema
   const attendanceSchema = z.object({
@@ -86,31 +102,21 @@ const ManagerDashboard = () => {
     },
   });
 
-  const [currentLeaveRequest, setCurrentLeaveRequest] = useState(null);
+  const [currentLeaveRequest, setCurrentLeaveRequest] = useState<LeaveRequest | null>(null);
   const [responseDialog, setResponseDialog] = useState(false);
 
-  // Fetch attendance data
-  const fetchAttendanceRecords = async () => {
+  // Load attendance records
+  const loadAttendanceRecords = async () => {
     try {
       setIsLoadingAttendance(true);
-      const { data, error } = await supabase
-        .from('attendance')
-        .select(`
-          *,
-          profiles:user_id (
-            username:username,
-            email:email
-          )
-        `)
-        .order('date', { ascending: false });
-
-      if (error) throw error;
-
-      // Format the data to handle the profiles join
+      
+      const data = await fetchAttendanceRecords();
+      
+      // Enrich with user profile data
       const formattedData = data.map(record => ({
         ...record,
-        username: record.profiles?.username,
-        email: record.profiles?.email,
+        username: profiles[record.user_id]?.username,
+        email: profiles[record.user_id]?.email,
       }));
 
       setAttendanceRecords(formattedData);
@@ -126,28 +132,18 @@ const ManagerDashboard = () => {
     }
   };
 
-  // Fetch leave requests
-  const fetchLeaveRequests = async () => {
+  // Load leave requests
+  const loadLeaveRequests = async () => {
     try {
       setIsLoadingLeaveRequests(true);
-      const { data, error } = await supabase
-        .from('leave_requests')
-        .select(`
-          *,
-          profiles:user_id (
-            username:username,
-            email:email
-          )
-        `)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-
-      // Format the data to handle the profiles join
+      
+      const data = await fetchLeaveRequests();
+      
+      // Enrich with user profile data
       const formattedData = data.map(request => ({
         ...request,
-        username: request.profiles?.username,
-        email: request.profiles?.email,
+        username: profiles[request.user_id]?.username,
+        email: profiles[request.user_id]?.email,
       }));
 
       setLeaveRequests(formattedData);
@@ -166,12 +162,12 @@ const ManagerDashboard = () => {
   useEffect(() => {
     if (session) {
       if (activeTab === 'attendance') {
-        fetchAttendanceRecords();
+        loadAttendanceRecords();
       } else if (activeTab === 'leave-requests') {
-        fetchLeaveRequests();
+        loadLeaveRequests();
       }
     }
-  }, [session, activeTab]);
+  }, [session, activeTab, profiles]);
 
   const handleSignOut = async () => {
     try {
@@ -190,7 +186,7 @@ const ManagerDashboard = () => {
   };
 
   // Open edit attendance dialog
-  const handleEditAttendance = (record) => {
+  const handleEditAttendance = (record: AttendanceRecord) => {
     setCurrentAttendance(record);
     
     // Format dates for the form
@@ -228,22 +224,16 @@ const ManagerDashboard = () => {
       let clockOutValue = null;
       if (values.clock_out) {
         const clockOutDate = new Date(`${dateValue}T${values.clock_out}`);
-        clockOutValue = clockOutValue = clockOutDate.toISOString();
+        clockOutValue = clockOutDate.toISOString();
       }
       
-      const { error } = await supabase
-        .from('attendance')
-        .update({
-          date: dateValue,
-          clock_in: clockInValue,
-          clock_out: clockOutValue,
-          status: values.status,
-          notes: values.notes,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', currentAttendance.id);
-      
-      if (error) throw error;
+      await updateAttendanceRecord(currentAttendance.id, {
+        date: dateValue,
+        clock_in: clockInValue,
+        clock_out: clockOutValue,
+        status: values.status,
+        notes: values.notes
+      });
       
       toast({
         title: 'Attendance Updated',
@@ -251,7 +241,7 @@ const ManagerDashboard = () => {
       });
       
       setEditAttendanceDialog(false);
-      fetchAttendanceRecords();
+      loadAttendanceRecords();
     } catch (error) {
       console.error('Error updating attendance:', error);
       toast({
@@ -263,7 +253,7 @@ const ManagerDashboard = () => {
   };
 
   // Open delete attendance confirmation
-  const handleDeleteAttendanceConfirm = (record) => {
+  const handleDeleteAttendanceConfirm = (record: AttendanceRecord) => {
     setCurrentAttendance(record);
     setDeleteAttendanceDialog(true);
   };
@@ -273,12 +263,7 @@ const ManagerDashboard = () => {
     try {
       if (!currentAttendance) return;
       
-      const { error } = await supabase
-        .from('attendance')
-        .delete()
-        .eq('id', currentAttendance.id);
-      
-      if (error) throw error;
+      await deleteAttendanceRecord(currentAttendance.id);
       
       toast({
         title: 'Attendance Deleted',
@@ -286,7 +271,7 @@ const ManagerDashboard = () => {
       });
       
       setDeleteAttendanceDialog(false);
-      fetchAttendanceRecords();
+      loadAttendanceRecords();
     } catch (error) {
       console.error('Error deleting attendance:', error);
       toast({
@@ -298,7 +283,7 @@ const ManagerDashboard = () => {
   };
 
   // Open response dialog for leave request
-  const handleLeaveResponse = (request) => {
+  const handleLeaveResponse = (request: LeaveRequest) => {
     setCurrentLeaveRequest(request);
     
     leaveResponseForm.reset({
@@ -312,19 +297,13 @@ const ManagerDashboard = () => {
   // Handle submitting response to leave request
   const handleSubmitResponse = async (values) => {
     try {
-      if (!currentLeaveRequest) return;
+      if (!currentLeaveRequest || !session?.user.id) return;
       
-      const { error } = await supabase
-        .from('leave_requests')
-        .update({
-          status: values.status,
-          reviewer_id: session?.user.id,
-          reviewed_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', currentLeaveRequest.id);
-      
-      if (error) throw error;
+      await updateLeaveRequest(currentLeaveRequest.id, {
+        status: values.status,
+        reviewer_id: session?.user.id,
+        reviewed_at: new Date().toISOString()
+      });
       
       toast({
         title: `Leave Request ${values.status === 'approved' ? 'Approved' : 'Declined'}`,
@@ -332,7 +311,7 @@ const ManagerDashboard = () => {
       });
       
       setResponseDialog(false);
-      fetchLeaveRequests();
+      loadLeaveRequests();
     } catch (error) {
       console.error('Error updating leave request:', error);
       toast({
@@ -472,7 +451,7 @@ const ManagerDashboard = () => {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {isLoadingAttendance ? (
+                      {isLoadingAttendance || isLoadingProfiles ? (
                         <TableRow>
                           <TableCell colSpan={6} className="text-center py-10">
                             <div className="flex flex-col items-center justify-center">
@@ -547,7 +526,7 @@ const ManagerDashboard = () => {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {isLoadingLeaveRequests ? (
+                      {isLoadingLeaveRequests || isLoadingProfiles ? (
                         <TableRow>
                           <TableCell colSpan={6} className="text-center py-10">
                             <div className="flex flex-col items-center justify-center">
