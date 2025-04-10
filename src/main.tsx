@@ -6,5 +6,7 @@ import './index.css'
 
 // Use React.StrictMode to ensure proper React context
 createRoot(document.getElementById("root")!).render(
-  <App />
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
 );
