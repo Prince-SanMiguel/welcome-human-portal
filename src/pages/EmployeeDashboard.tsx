@@ -5,12 +5,26 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { User, Calendar, Clock, FileText } from 'lucide-react';
+import { User, Calendar, Clock, FileText, PenLine, Save, X } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { supabase } from '@/integrations/supabase/client';
 
 const EmployeeDashboard = () => {
   const { session, signOut, userRole } = useAuth();
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState('personal-info');
+  
+  // State for editing mode
+  const [isEditing, setIsEditing] = useState(false);
+  const [userData, setUserData] = useState({
+    email: session?.user.email || '',
+    fullName: session?.user.user_metadata?.full_name || '',
+    username: session?.user.user_metadata?.username || ''
+  });
+
+  // State for delete confirmation dialog
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   const handleSignOut = async () => {
     try {
@@ -23,6 +37,87 @@ const EmployeeDashboard = () => {
       toast({
         title: 'Error',
         description: 'Failed to sign out',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleEditToggle = () => {
+    if (isEditing) {
+      // If we're canceling editing, reset the form data
+      setUserData({
+        email: session?.user.email || '',
+        fullName: session?.user.user_metadata?.full_name || '',
+        username: session?.user.user_metadata?.username || ''
+      });
+    }
+    setIsEditing(!isEditing);
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setUserData({
+      ...userData,
+      [name]: value
+    });
+  };
+
+  const handleSaveChanges = async () => {
+    try {
+      // Update user_metadata
+      const { data, error } = await supabase.auth.updateUser({
+        data: { 
+          full_name: userData.fullName,
+          username: userData.username
+        }
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: 'Success',
+        description: 'Your information has been updated',
+      });
+
+      setIsEditing(false);
+    } catch (error) {
+      console.error('Error updating user info:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to update your information',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleDeleteUsername = async () => {
+    try {
+      // Update user_metadata, removing the username field
+      const { data, error } = await supabase.auth.updateUser({
+        data: { 
+          username: null
+        }
+      });
+
+      if (error) throw error;
+
+      // Update local state
+      setUserData({
+        ...userData,
+        username: ''
+      });
+
+      toast({
+        title: 'Success',
+        description: 'Username has been removed',
+      });
+
+      setDeleteDialogOpen(false);
+    } catch (error) {
+      console.error('Error deleting username:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to remove username',
         variant: 'destructive',
       });
     }
@@ -64,28 +159,108 @@ const EmployeeDashboard = () => {
 
           <TabsContent value="personal-info" className="space-y-4">
             <Card>
-              <CardHeader>
-                <CardTitle>Personal Information</CardTitle>
-                <CardDescription>View and update your personal details</CardDescription>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle>Personal Information</CardTitle>
+                  <CardDescription>View and update your personal details</CardDescription>
+                </div>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={handleEditToggle}
+                  className="flex items-center gap-1"
+                >
+                  {isEditing ? (
+                    <>
+                      <X className="h-4 w-4" /> Cancel
+                    </>
+                  ) : (
+                    <>
+                      <PenLine className="h-4 w-4" /> Edit
+                    </>
+                  )}
+                </Button>
               </CardHeader>
               <CardContent>
-                <div className="grid gap-4 md:grid-cols-2">
+                <div className="grid gap-6">
                   <div className="space-y-2">
                     <h3 className="text-sm font-medium">Email</h3>
-                    <p className="text-sm">{session?.user.email}</p>
+                    <Input 
+                      type="email"
+                      value={userData.email}
+                      disabled={true}
+                      className="bg-gray-50"
+                    />
+                    <p className="text-xs text-gray-500">Your email cannot be changed</p>
                   </div>
+                  
+                  <div className="space-y-2">
+                    <h3 className="text-sm font-medium">Full Name</h3>
+                    <Input 
+                      name="fullName"
+                      value={userData.fullName}
+                      onChange={handleInputChange}
+                      disabled={!isEditing}
+                      className={!isEditing ? "bg-gray-50" : ""}
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <h3 className="text-sm font-medium">Username</h3>
+                      {isEditing && userData.username && (
+                        <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+                          <DialogTrigger asChild>
+                            <Button variant="destructive" size="sm">Delete Username</Button>
+                          </DialogTrigger>
+                          <DialogContent>
+                            <DialogHeader>
+                              <DialogTitle>Confirm Deletion</DialogTitle>
+                              <DialogDescription>
+                                Are you sure you want to delete your username? This action cannot be undone.
+                              </DialogDescription>
+                            </DialogHeader>
+                            <DialogFooter>
+                              <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>
+                              <Button variant="destructive" onClick={handleDeleteUsername}>Delete</Button>
+                            </DialogFooter>
+                          </DialogContent>
+                        </Dialog>
+                      )}
+                    </div>
+                    <Input 
+                      name="username"
+                      value={userData.username}
+                      onChange={handleInputChange}
+                      disabled={!isEditing}
+                      placeholder={!isEditing && !userData.username ? "No username set" : isEditing && !userData.username ? "Add a username" : ""}
+                      className={!isEditing ? "bg-gray-50" : ""}
+                    />
+                  </div>
+                  
                   <div className="space-y-2">
                     <h3 className="text-sm font-medium">Role</h3>
-                    <p className="text-sm capitalize">{userRole}</p>
+                    <p className="text-sm px-3 py-2 border rounded-md bg-gray-50 capitalize">{userRole}</p>
                   </div>
+                  
                   <div className="space-y-2">
                     <h3 className="text-sm font-medium">User ID</h3>
-                    <p className="text-sm">{session?.user.id}</p>
+                    <p className="text-sm px-3 py-2 border rounded-md bg-gray-50 overflow-auto font-mono">{session?.user.id}</p>
                   </div>
+                  
                   <div className="space-y-2">
                     <h3 className="text-sm font-medium">Last Sign In</h3>
-                    <p className="text-sm">{new Date(session?.user.last_sign_in_at || '').toLocaleString()}</p>
+                    <p className="text-sm px-3 py-2 border rounded-md bg-gray-50">{new Date(session?.user.last_sign_in_at || '').toLocaleString()}</p>
                   </div>
+                  
+                  {isEditing && (
+                    <Button 
+                      onClick={handleSaveChanges} 
+                      className="w-full md:w-auto md:ml-auto flex items-center gap-2"
+                    >
+                      <Save className="h-4 w-4" /> Save Changes
+                    </Button>
+                  )}
                 </div>
               </CardContent>
             </Card>
