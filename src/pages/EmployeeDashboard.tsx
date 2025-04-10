@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -23,8 +22,9 @@ const EmployeeDashboard = () => {
     username: session?.user.user_metadata?.username || ''
   });
 
-  // State for delete confirmation dialog
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  // Determine the display name (username or first part of email)
+  const displayName = userData.username || 
+    (session?.user.email?.split('@')[0] || 'User');
 
   const handleSignOut = async () => {
     try {
@@ -132,7 +132,7 @@ const EmployeeDashboard = () => {
             <h1 className="text-xl font-bold text-gray-900">Employee Dashboard</h1>
           </div>
           <div className="flex items-center space-x-4">
-            <span className="text-sm text-gray-600">Welcome, {session?.user.email}</span>
+            <span className="text-sm text-gray-600">Welcome, {displayName}</span>
             <Button variant="ghost" onClick={handleSignOut}>
               Sign Out
             </Button>
