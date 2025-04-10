@@ -9,18 +9,9 @@ interface UserProfile {
   full_name?: string | null;
 }
 
-interface AdminUser {
-  id: string;
-  email?: string | null;
-  user_metadata?: {
-    username?: string | null;
-    full_name?: string | null;
-  };
-}
-
 /**
  * Custom hook to fetch user profiles for displaying user information
- * This is necessary because we can't directly join with auth.users
+ * This works by querying the user metadata
  */
 export const useProfilesJoin = (userIds: string[]) => {
   const [profiles, setProfiles] = useState<Record<string, UserProfile>>({});
@@ -37,20 +28,30 @@ export const useProfilesJoin = (userIds: string[]) => {
       try {
         setIsLoading(true);
         
-        // Batch user IDs to use in the query
-        const { data, error } = await supabase.auth.admin.listUsers();
+        // Fetch user profiles
+        const promises = userIds.map(async (userId) => {
+          const { data: userData, error: userError } = await supabase.auth.admin.getUserById(userId);
+          
+          if (userError) throw userError;
+          
+          if (userData && userData.user) {
+            return {
+              id: userData.user.id,
+              email: userData.user.email,
+              username: userData.user.user_metadata?.username,
+              full_name: userData.user.user_metadata?.full_name,
+            } as UserProfile;
+          }
+          
+          return null;
+        });
         
-        if (error) throw error;
+        const results = await Promise.all(promises);
         
         // Create a map of user ID to profile data
-        const profileMap = (data?.users || []).reduce((acc, user: AdminUser) => {
-          if (userIds.includes(user.id)) {
-            acc[user.id] = {
-              id: user.id,
-              email: user.email,
-              username: user.user_metadata?.username,
-              full_name: user.user_metadata?.full_name,
-            };
+        const profileMap = results.reduce((acc, profile) => {
+          if (profile) {
+            acc[profile.id] = profile;
           }
           return acc;
         }, {} as Record<string, UserProfile>);

@@ -1,125 +1,63 @@
-
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
-import { 
-  Users, Calendar, ClipboardList, CheckCircle, 
-  X, Pencil, Search, CheckCheck, AlertTriangle
-} from 'lucide-react';
 import { format } from 'date-fns';
-import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  Users, Calendar, Clock, FileText, PenLine, Save, CheckCheck, XCircle,
+  CheckCircle, AlertCircle, CalendarPlus, FolderSearch
+} from 'lucide-react';
 import { Input } from '@/components/ui/input';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
-import { 
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle
-} from '@/components/ui/alert-dialog';
-import { useProfilesJoin } from '@/hooks/useProfilesJoin';
-import { 
-  fetchAttendanceRecords, 
-  updateAttendanceRecord, 
-  deleteAttendanceRecord, 
-  fetchLeaveRequests, 
-  updateLeaveRequest 
+import { Badge } from '@/components/ui/badge';
+import {
+  fetchAttendanceRecordsWithUserInfo,
+  fetchLeaveRequestsWithUserInfo,
+  updateAttendanceRecord,
+  updateLeaveRequest
 } from '@/utils/databaseHelpers';
 import { AttendanceRecord, LeaveRequest } from '@/types/database';
+import { useProfilesJoin } from '@/hooks/useProfilesJoin';
+import { supabase } from '@/integrations/supabase/client';
 
 const ManagerDashboard = () => {
-  const { session, signOut, userRole } = useAuth();
+  const { session, signOut } = useAuth();
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState('attendance');
-
-  // State for attendance
+  
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
   const [isLoadingAttendance, setIsLoadingAttendance] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [editAttendanceDialog, setEditAttendanceDialog] = useState(false);
-  const [currentAttendance, setCurrentAttendance] = useState<AttendanceRecord | null>(null);
-  const [deleteAttendanceDialog, setDeleteAttendanceDialog] = useState(false);
-
-  // State for leave requests
+  
   const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
   const [isLoadingLeaveRequests, setIsLoadingLeaveRequests] = useState(true);
-
-  // Load user profiles for attendance and leave requests
-  const uniqueUserIds = [
+  
+  const [selectedAttendanceRecord, setSelectedAttendanceRecord] = useState<AttendanceRecord | null>(null);
+  const [isAttendanceDialogOpen, setIsAttendanceDialogOpen] = useState(false);
+  
+  const [selectedLeaveRequest, setSelectedLeaveRequest] = useState<LeaveRequest | null>(null);
+  const [isLeaveDialogOpen, setIsLeaveDialogOpen] = useState(false);
+  
+  // Extract unique user IDs from records for loading profile information
+  const userIds = [
     ...new Set([
       ...attendanceRecords.map(record => record.user_id),
-      ...leaveRequests.map(request => request.user_id)
-    ])
+      ...leaveRequests.map(request => request.user_id),
+    ]),
   ];
-  const { profiles, isLoading: isLoadingProfiles } = useProfilesJoin(uniqueUserIds);
+  
+  const { profiles, isLoading: isLoadingProfiles } = useProfilesJoin(userIds);
 
-  // Attendance form schema
-  const attendanceSchema = z.object({
-    date: z.string().min(1, "Date is required"),
-    clock_in: z.string().optional().nullable(),
-    clock_out: z.string().optional().nullable(),
-    status: z.string().min(1, "Status is required"),
-    notes: z.string().optional().nullable(),
-  });
-
-  // Setup attendance form
-  const attendanceForm = useForm({
-    resolver: zodResolver(attendanceSchema),
-    defaultValues: {
-      date: "",
-      clock_in: "",
-      clock_out: "",
-      status: "present",
-      notes: "",
-    },
-  });
-
-  // Leave response form schema
-  const leaveResponseSchema = z.object({
-    status: z.enum(["approved", "declined"]),
-    notes: z.string().optional(),
-  });
-
-  // Setup leave response form
-  const leaveResponseForm = useForm({
-    resolver: zodResolver(leaveResponseSchema),
-    defaultValues: {
-      status: "approved",
-      notes: "",
-    },
-  });
-
-  const [currentLeaveRequest, setCurrentLeaveRequest] = useState<LeaveRequest | null>(null);
-  const [responseDialog, setResponseDialog] = useState(false);
-
-  // Load attendance records
   const loadAttendanceRecords = async () => {
     try {
       setIsLoadingAttendance(true);
       
-      const data = await fetchAttendanceRecords();
-      
-      // Enrich with user profile data
-      const formattedData = data.map(record => ({
-        ...record,
-        username: profiles[record.user_id]?.username,
-        email: profiles[record.user_id]?.email,
-      }));
-
-      setAttendanceRecords(formattedData);
+      const data = await fetchAttendanceRecordsWithUserInfo();
+      setAttendanceRecords(data || []);
     } catch (error) {
       console.error('Error fetching attendance records:', error);
       toast({
@@ -132,21 +70,12 @@ const ManagerDashboard = () => {
     }
   };
 
-  // Load leave requests
   const loadLeaveRequests = async () => {
     try {
       setIsLoadingLeaveRequests(true);
       
-      const data = await fetchLeaveRequests();
-      
-      // Enrich with user profile data
-      const formattedData = data.map(request => ({
-        ...request,
-        username: profiles[request.user_id]?.username,
-        email: profiles[request.user_id]?.email,
-      }));
-
-      setLeaveRequests(formattedData);
+      const data = await fetchLeaveRequestsWithUserInfo();
+      setLeaveRequests(data || []);
     } catch (error) {
       console.error('Error fetching leave requests:', error);
       toast({
@@ -167,7 +96,7 @@ const ManagerDashboard = () => {
         loadLeaveRequests();
       }
     }
-  }, [session, activeTab, profiles]);
+  }, [session, activeTab]);
 
   const handleSignOut = async () => {
     try {
@@ -185,65 +114,30 @@ const ManagerDashboard = () => {
     }
   };
 
-  // Open edit attendance dialog
   const handleEditAttendance = (record: AttendanceRecord) => {
-    setCurrentAttendance(record);
-    
-    // Format dates for the form
-    const formattedDate = record.date ? format(new Date(record.date), 'yyyy-MM-dd') : '';
-    const formattedClockIn = record.clock_in ? format(new Date(record.clock_in), 'HH:mm') : '';
-    const formattedClockOut = record.clock_out ? format(new Date(record.clock_out), 'HH:mm') : '';
-    
-    attendanceForm.reset({
-      date: formattedDate,
-      clock_in: formattedClockIn,
-      clock_out: formattedClockOut,
-      status: record.status || 'present',
-      notes: record.notes || '',
-    });
-    
-    setEditAttendanceDialog(true);
+    setSelectedAttendanceRecord(record);
+    setIsAttendanceDialogOpen(true);
   };
 
-  // Handle saving attendance edits
-  const handleSaveAttendance = async (values) => {
+  const handleSaveAttendance = async () => {
+    if (!selectedAttendanceRecord) return;
+    
     try {
-      if (!currentAttendance) return;
-      
-      // Format the date and time values for the database
-      const dateValue = values.date;
-      
-      // For clock_in, combine date and time
-      let clockInValue = null;
-      if (values.clock_in) {
-        const clockInDate = new Date(`${dateValue}T${values.clock_in}`);
-        clockInValue = clockInDate.toISOString();
-      }
-      
-      // For clock_out, combine date and time
-      let clockOutValue = null;
-      if (values.clock_out) {
-        const clockOutDate = new Date(`${dateValue}T${values.clock_out}`);
-        clockOutValue = clockOutDate.toISOString();
-      }
-      
-      await updateAttendanceRecord(currentAttendance.id, {
-        date: dateValue,
-        clock_in: clockInValue,
-        clock_out: clockOutValue,
-        status: values.status,
-        notes: values.notes
+      await updateAttendanceRecord(selectedAttendanceRecord.id, {
+        date: selectedAttendanceRecord.date,
+        status: selectedAttendanceRecord.status,
+        notes: selectedAttendanceRecord.notes
       });
       
       toast({
-        title: 'Attendance Updated',
-        description: 'The attendance record has been updated successfully',
+        title: 'Success',
+        description: 'Attendance record updated successfully',
       });
       
-      setEditAttendanceDialog(false);
+      setIsAttendanceDialogOpen(false);
       loadAttendanceRecords();
     } catch (error) {
-      console.error('Error updating attendance:', error);
+      console.error('Error updating attendance record:', error);
       toast({
         title: 'Error',
         description: 'Failed to update attendance record',
@@ -252,65 +146,27 @@ const ManagerDashboard = () => {
     }
   };
 
-  // Open delete attendance confirmation
-  const handleDeleteAttendanceConfirm = (record: AttendanceRecord) => {
-    setCurrentAttendance(record);
-    setDeleteAttendanceDialog(true);
+  const handleReviewLeave = (request: LeaveRequest) => {
+    setSelectedLeaveRequest(request);
+    setIsLeaveDialogOpen(true);
   };
 
-  // Delete attendance record
-  const handleDeleteAttendance = async () => {
-    try {
-      if (!currentAttendance) return;
-      
-      await deleteAttendanceRecord(currentAttendance.id);
-      
-      toast({
-        title: 'Attendance Deleted',
-        description: 'The attendance record has been deleted successfully',
-      });
-      
-      setDeleteAttendanceDialog(false);
-      loadAttendanceRecords();
-    } catch (error) {
-      console.error('Error deleting attendance:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to delete attendance record',
-        variant: 'destructive',
-      });
-    }
-  };
-
-  // Open response dialog for leave request
-  const handleLeaveResponse = (request: LeaveRequest) => {
-    setCurrentLeaveRequest(request);
+  const handleLeaveAction = async (status: 'approved' | 'declined') => {
+    if (!selectedLeaveRequest || !session?.user.id) return;
     
-    leaveResponseForm.reset({
-      status: "approved",
-      notes: "",
-    });
-    
-    setResponseDialog(true);
-  };
-
-  // Handle submitting response to leave request
-  const handleSubmitResponse = async (values) => {
     try {
-      if (!currentLeaveRequest || !session?.user.id) return;
-      
-      await updateLeaveRequest(currentLeaveRequest.id, {
-        status: values.status,
-        reviewer_id: session?.user.id,
+      await updateLeaveRequest(selectedLeaveRequest.id, {
+        status,
+        reviewer_id: session.user.id,
         reviewed_at: new Date().toISOString()
       });
       
       toast({
-        title: `Leave Request ${values.status === 'approved' ? 'Approved' : 'Declined'}`,
-        description: `The leave request has been ${values.status === 'approved' ? 'approved' : 'declined'} successfully`,
+        title: `Leave Request ${status === 'approved' ? 'Approved' : 'Declined'}`,
+        description: `The leave request has been ${status}`,
       });
       
-      setResponseDialog(false);
+      setIsLeaveDialogOpen(false);
       loadLeaveRequests();
     } catch (error) {
       console.error('Error updating leave request:', error);
@@ -322,52 +178,16 @@ const ManagerDashboard = () => {
     }
   };
 
-  // Filter attendance records based on search query
-  const filteredAttendanceRecords = attendanceRecords.filter(record => {
-    if (!searchQuery) return true;
-    
-    const searchLower = searchQuery.toLowerCase();
-    const email = record.email || '';
-    const username = record.username || '';
-    const dateStr = record.date ? format(new Date(record.date), 'yyyy-MM-dd') : '';
-    
-    return (
-      email.toLowerCase().includes(searchLower) ||
-      username.toLowerCase().includes(searchLower) ||
-      dateStr.includes(searchLower)
-    );
-  });
-
-  // Helper function to format date
   const formatDate = (dateString) => {
     if (!dateString) return '-';
     return format(new Date(dateString), 'MMM dd, yyyy');
   };
 
-  // Helper function to format time
   const formatTime = (timeString) => {
     if (!timeString) return '-';
     return format(new Date(timeString), 'h:mm a');
   };
 
-  // Helper function to display user info
-  const getUserDisplay = (record) => {
-    const username = record.username;
-    const email = record.email;
-    
-    if (username && email) {
-      return (
-        <div>
-          <div className="font-medium">{username}</div>
-          <div className="text-xs text-gray-500">{email}</div>
-        </div>
-      );
-    }
-    
-    return email || 'Unknown User';
-  };
-
-  // Status badge rendering
   const renderStatusBadge = (status) => {
     switch (status?.toLowerCase()) {
       case 'pending':
@@ -378,15 +198,17 @@ const ManagerDashboard = () => {
         return <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">Declined</Badge>;
       case 'cancelled':
         return <Badge variant="outline" className="bg-slate-50 text-slate-700 border-slate-200">Cancelled</Badge>;
-      case 'present':
-        return <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">Present</Badge>;
-      case 'absent':
-        return <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">Absent</Badge>;
-      case 'late':
-        return <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200">Late</Badge>;
       default:
-        return <Badge variant="outline">{status || 'Unknown'}</Badge>;
+        return <Badge variant="outline">{status}</Badge>;
     }
+  };
+
+  const getUserDisplayName = (userId) => {
+    const profile = profiles[userId];
+    if (profile) {
+      return profile.username || profile.email || profile.full_name || 'Unknown User';
+    }
+    return 'Loading...';
   };
 
   return (
@@ -394,11 +216,11 @@ const ManagerDashboard = () => {
       <header className="bg-white shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
           <div className="flex items-center">
-            <Users className="h-8 w-8 text-blue-600 mr-2" />
+            <FolderSearch className="h-8 w-8 text-blue-600 mr-2" />
             <h1 className="text-xl font-bold text-gray-900">Manager Dashboard</h1>
           </div>
           <div className="flex items-center space-x-4">
-            <span className="text-sm text-gray-600">Welcome, {session?.user.email}</span>
+            <span className="text-sm text-gray-600">Welcome, Manager</span>
             <Button variant="ghost" onClick={handleSignOut}>
               Sign Out
             </Button>
@@ -410,8 +232,8 @@ const ManagerDashboard = () => {
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
           <TabsList className="w-full justify-start">
             <TabsTrigger value="attendance" className="flex items-center gap-2">
-              <ClipboardList className="h-4 w-4" />
-              Review Attendance
+              <Clock className="h-4 w-4" />
+              Attendance
             </TabsTrigger>
             <TabsTrigger value="leave-requests" className="flex items-center gap-2">
               <Calendar className="h-4 w-4" />
@@ -422,22 +244,10 @@ const ManagerDashboard = () => {
           <TabsContent value="attendance" className="space-y-4">
             <Card>
               <CardHeader>
-                <CardTitle>Team Attendance</CardTitle>
-                <CardDescription>Review and manage team attendance records</CardDescription>
+                <CardTitle>Employee Attendance</CardTitle>
+                <CardDescription>View and manage employee attendance records</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
-                  <div className="relative w-full md:w-80">
-                    <Search className="absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
-                    <Input
-                      placeholder="Search by name, email, or date..."
-                      className="pl-8"
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                    />
-                  </div>
-                </div>
-                
                 <div className="rounded-md border">
                   <Table>
                     <TableHeader>
@@ -451,7 +261,7 @@ const ManagerDashboard = () => {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {isLoadingAttendance || isLoadingProfiles ? (
+                      {isLoadingAttendance ? (
                         <TableRow>
                           <TableCell colSpan={6} className="text-center py-10">
                             <div className="flex flex-col items-center justify-center">
@@ -460,41 +270,35 @@ const ManagerDashboard = () => {
                             </div>
                           </TableCell>
                         </TableRow>
-                      ) : filteredAttendanceRecords.length === 0 ? (
+                      ) : attendanceRecords.length === 0 ? (
                         <TableRow>
                           <TableCell colSpan={6} className="text-center py-10">
                             <div className="flex flex-col items-center justify-center">
-                              <ClipboardList className="h-12 w-12 text-gray-400 mb-2" />
-                              <p className="text-sm text-gray-500">No attendance records to display</p>
+                              <Clock className="h-12 w-12 text-gray-400 mb-2" />
+                              <p className="text-sm text-gray-500">No attendance records found</p>
                             </div>
                           </TableCell>
                         </TableRow>
                       ) : (
-                        filteredAttendanceRecords.map((record) => (
+                        attendanceRecords.map((record) => (
                           <TableRow key={record.id}>
-                            <TableCell>{getUserDisplay(record)}</TableCell>
+                            <TableCell>{getUserDisplayName(record.user_id)}</TableCell>
                             <TableCell>{formatDate(record.date)}</TableCell>
                             <TableCell>{formatTime(record.clock_in)}</TableCell>
                             <TableCell>{formatTime(record.clock_out)}</TableCell>
-                            <TableCell>{renderStatusBadge(record.status)}</TableCell>
                             <TableCell>
-                              <div className="flex space-x-2">
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => handleEditAttendance(record)}
-                                >
-                                  <Pencil className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="text-red-600 border-red-200 hover:bg-red-50"
-                                  onClick={() => handleDeleteAttendanceConfirm(record)}
-                                >
-                                  <X className="h-4 w-4" />
-                                </Button>
-                              </div>
+                              <Badge variant="outline" className="capitalize">
+                                {record.status || 'present'}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleEditAttendance(record)}
+                              >
+                                Edit
+                              </Button>
                             </TableCell>
                           </TableRow>
                         ))
@@ -509,8 +313,8 @@ const ManagerDashboard = () => {
           <TabsContent value="leave-requests" className="space-y-4">
             <Card>
               <CardHeader>
-                <CardTitle>Pending Leave Requests</CardTitle>
-                <CardDescription>Review and approve team leave requests</CardDescription>
+                <CardTitle>Employee Leave Requests</CardTitle>
+                <CardDescription>Review and manage employee leave requests</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="rounded-md border">
@@ -519,14 +323,14 @@ const ManagerDashboard = () => {
                       <TableRow>
                         <TableHead>Employee</TableHead>
                         <TableHead>Type</TableHead>
-                        <TableHead>From</TableHead>
-                        <TableHead>To</TableHead>
+                        <TableHead>Period</TableHead>
                         <TableHead>Status</TableHead>
+                        <TableHead>Submitted</TableHead>
                         <TableHead>Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {isLoadingLeaveRequests || isLoadingProfiles ? (
+                      {isLoadingLeaveRequests ? (
                         <TableRow>
                           <TableCell colSpan={6} className="text-center py-10">
                             <div className="flex flex-col items-center justify-center">
@@ -539,33 +343,30 @@ const ManagerDashboard = () => {
                         <TableRow>
                           <TableCell colSpan={6} className="text-center py-10">
                             <div className="flex flex-col items-center justify-center">
-                              <CheckCircle className="h-12 w-12 text-gray-400 mb-2" />
-                              <p className="text-sm text-gray-500">No pending leave requests</p>
+                              <FileText className="h-12 w-12 text-gray-400 mb-2" />
+                              <p className="text-sm text-gray-500">No leave requests found</p>
                             </div>
                           </TableCell>
                         </TableRow>
                       ) : (
                         leaveRequests.map((request) => (
                           <TableRow key={request.id}>
-                            <TableCell>{getUserDisplay(request)}</TableCell>
+                            <TableCell>{getUserDisplayName(request.user_id)}</TableCell>
                             <TableCell className="capitalize">{request.type}</TableCell>
-                            <TableCell>{formatDate(request.start_date)}</TableCell>
-                            <TableCell>{formatDate(request.end_date)}</TableCell>
-                            <TableCell>{renderStatusBadge(request.status)}</TableCell>
                             <TableCell>
-                              {request.status === 'pending' && (
-                                <div className="flex space-x-2">
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="flex items-center gap-1 bg-green-50 text-green-700 border-green-200 hover:bg-green-100"
-                                    onClick={() => handleLeaveResponse(request)}
-                                  >
-                                    <CheckCheck className="h-4 w-4" />
-                                    <span>Respond</span>
-                                  </Button>
-                                </div>
-                              )}
+                              {formatDate(request.start_date)}
+                              {request.start_date !== request.end_date && ` to ${formatDate(request.end_date)}`}
+                            </TableCell>
+                            <TableCell>{renderStatusBadge(request.status)}</TableCell>
+                            <TableCell>{formatDate(request.created_at)}</TableCell>
+                            <TableCell>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleReviewLeave(request)}
+                              >
+                                Review
+                              </Button>
                             </TableCell>
                           </TableRow>
                         ))
@@ -579,211 +380,135 @@ const ManagerDashboard = () => {
         </Tabs>
       </main>
 
-      {/* Edit Attendance Dialog */}
-      <Dialog open={editAttendanceDialog} onOpenChange={setEditAttendanceDialog}>
-        <DialogContent className="sm:max-w-[525px]">
+      {/* Attendance Edit Dialog */}
+      <Dialog open={isAttendanceDialogOpen} onOpenChange={setIsAttendanceDialogOpen}>
+        <DialogContent>
           <DialogHeader>
             <DialogTitle>Edit Attendance Record</DialogTitle>
             <DialogDescription>
-              Update the attendance details for this employee
+              Update the attendance record for the selected employee.
             </DialogDescription>
           </DialogHeader>
-          
-          <Form {...attendanceForm}>
-            <form onSubmit={attendanceForm.handleSubmit(handleSaveAttendance)} className="space-y-4">
-              <FormField
-                control={attendanceForm.control}
-                name="date"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Date</FormLabel>
-                    <FormControl>
-                      <Input type="date" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <label htmlFor="date" className="text-right font-medium">
+                Date
+              </label>
+              <Input
+                type="date"
+                id="date"
+                value={selectedAttendanceRecord?.date || ''}
+                onChange={(e) =>
+                  setSelectedAttendanceRecord({
+                    ...selectedAttendanceRecord,
+                    date: e.target.value,
+                  } as AttendanceRecord)
+                }
+                className="col-span-3"
               />
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <FormField
-                  control={attendanceForm.control}
-                  name="clock_in"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Clock In</FormLabel>
-                      <FormControl>
-                        <Input type="time" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                
-                <FormField
-                  control={attendanceForm.control}
-                  name="clock_out"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Clock Out</FormLabel>
-                      <FormControl>
-                        <Input type="time" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-              
-              <FormField
-                control={attendanceForm.control}
-                name="status"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Status</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select status" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="present">Present</SelectItem>
-                        <SelectItem value="absent">Absent</SelectItem>
-                        <SelectItem value="late">Late</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <label htmlFor="status" className="text-right font-medium">
+                Status
+              </label>
+              <Select
+                onValueChange={(value) =>
+                  setSelectedAttendanceRecord({
+                    ...selectedAttendanceRecord,
+                    status: value,
+                  } as AttendanceRecord)
+                }
+                defaultValue={selectedAttendanceRecord?.status || ''}
+              >
+                <SelectTrigger className="col-span-3">
+                  <SelectValue placeholder="Select status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="present">Present</SelectItem>
+                  <SelectItem value="absent">Absent</SelectItem>
+                  <SelectItem value="late">Late</SelectItem>
+                  <SelectItem value="excused">Excused</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-4 items-start gap-4">
+              <label htmlFor="notes" className="text-right font-medium">
+                Notes
+              </label>
+              <Textarea
+                id="notes"
+                value={selectedAttendanceRecord?.notes || ''}
+                onChange={(e) =>
+                  setSelectedAttendanceRecord({
+                    ...selectedAttendanceRecord,
+                    notes: e.target.value,
+                  } as AttendanceRecord)
+                }
+                className="col-span-3"
               />
-              
-              <FormField
-                control={attendanceForm.control}
-                name="notes"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Notes</FormLabel>
-                    <FormControl>
-                      <Textarea {...field} placeholder="Add any additional notes" rows={3} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
-              <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setEditAttendanceDialog(false)}>
-                  Cancel
-                </Button>
-                <Button type="submit">Save Changes</Button>
-              </DialogFooter>
-            </form>
-          </Form>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="secondary" onClick={() => setIsAttendanceDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" onClick={handleSaveAttendance}>
+              Save changes
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Delete Attendance Confirmation */}
-      <AlertDialog open={deleteAttendanceDialog} onOpenChange={setDeleteAttendanceDialog}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Attendance Record</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete this attendance record? This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteAttendance} className="bg-red-600 hover:bg-red-700">
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* Leave Request Response Dialog */}
-      <Dialog open={responseDialog} onOpenChange={setResponseDialog}>
-        <DialogContent className="sm:max-w-[525px]">
+      {/* Leave Request Review Dialog */}
+      <Dialog open={isLeaveDialogOpen} onOpenChange={setIsLeaveDialogOpen}>
+        <DialogContent>
           <DialogHeader>
-            <DialogTitle>Respond to Leave Request</DialogTitle>
+            <DialogTitle>Review Leave Request</DialogTitle>
             <DialogDescription>
-              Review and respond to this leave request
+              Review and take action on the employee's leave request.
             </DialogDescription>
           </DialogHeader>
-          
-          {currentLeaveRequest && (
-            <div className="bg-gray-50 p-4 rounded-md mb-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
-                <div><span className="font-medium">Employee:</span> {currentLeaveRequest.email}</div>
-                <div><span className="font-medium">Type:</span> <span className="capitalize">{currentLeaveRequest.type}</span></div>
-                <div><span className="font-medium">From:</span> {formatDate(currentLeaveRequest.start_date)}</div>
-                <div><span className="font-medium">To:</span> {formatDate(currentLeaveRequest.end_date)}</div>
-                {currentLeaveRequest.reason && (
-                  <div className="col-span-2"><span className="font-medium">Reason:</span> {currentLeaveRequest.reason}</div>
-                )}
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <p className="text-sm font-medium">Employee</p>
+                <p>{selectedLeaveRequest ? getUserDisplayName(selectedLeaveRequest.user_id) : '-'}</p>
+              </div>
+              <div>
+                <p className="text-sm font-medium">Type</p>
+                <p className="capitalize">{selectedLeaveRequest?.type || '-'}</p>
               </div>
             </div>
-          )}
-          
-          <Form {...leaveResponseForm}>
-            <form onSubmit={leaveResponseForm.handleSubmit(handleSubmitResponse)} className="space-y-4">
-              <FormField
-                control={leaveResponseForm.control}
-                name="status"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Your Response</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select your response" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="approved">Approve Request</SelectItem>
-                        <SelectItem value="declined">Decline Request</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <p className="text-sm font-medium">Start Date</p>
+                <p>{formatDate(selectedLeaveRequest?.start_date || '')}</p>
+              </div>
+              <div>
+                <p className="text-sm font-medium">End Date</p>
+                <p>{formatDate(selectedLeaveRequest?.end_date || '')}</p>
+              </div>
+            </div>
+            <div>
+              <p className="text-sm font-medium">Reason</p>
+              <Textarea
+                readOnly
+                value={selectedLeaveRequest?.reason || ''}
+                className="bg-gray-100"
               />
-              
-              <FormField
-                control={leaveResponseForm.control}
-                name="notes"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Notes (Optional)</FormLabel>
-                    <FormControl>
-                      <Textarea {...field} placeholder="Add any comments or notes" rows={3} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
-              <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setResponseDialog(false)}>
-                  Cancel
-                </Button>
-                <Button 
-                  type="submit"
-                  variant={leaveResponseForm.getValues("status") === "approved" ? "default" : "destructive"}
-                >
-                  {leaveResponseForm.getValues("status") === "approved" ? (
-                    <span className="flex items-center gap-2">
-                      <CheckCircle className="h-4 w-4" /> Approve
-                    </span>
-                  ) : (
-                    <span className="flex items-center gap-2">
-                      <AlertTriangle className="h-4 w-4" /> Decline
-                    </span>
-                  )}
-                </Button>
-              </DialogFooter>
-            </form>
-          </Form>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="secondary" onClick={() => setIsLeaveDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" onClick={() => handleLeaveAction('approved')}>
+              Approve
+            </Button>
+            <Button type="submit" variant="destructive" onClick={() => handleLeaveAction('declined')}>
+              Decline
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

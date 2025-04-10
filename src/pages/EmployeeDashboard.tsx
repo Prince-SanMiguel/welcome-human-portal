@@ -266,7 +266,7 @@ const EmployeeDashboard = () => {
 
   const handleClockOut = async () => {
     try {
-      if (!todayAttendance) {
+      if (!todayAttendance || !todayAttendance.id) {
         throw new Error('No clock-in record found for today');
       }
       
@@ -289,7 +289,7 @@ const EmployeeDashboard = () => {
       console.error('Error clocking out:', error);
       toast({
         title: 'Error',
-        description: 'Failed to clock out',
+        description: 'Failed to clock out: ' + (error instanceof Error ? error.message : 'Unknown error'),
         variant: 'destructive',
       });
     }

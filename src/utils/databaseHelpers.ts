@@ -23,6 +23,16 @@ export const fetchAttendanceRecords = async (userId?: string) => {
   return data as AttendanceRecord[];
 };
 
+export const fetchAttendanceRecordsWithUserInfo = async () => {
+  const { data, error } = await supabase
+    .from('attendance')
+    .select('*')
+    .order('date', { ascending: false });
+  
+  if (error) throw error;
+  return data as AttendanceRecord[];
+};
+
 export const createAttendanceRecord = async (record: Partial<AttendanceRecord>) => {
   const { data, error } = await supabase
     .from('attendance')
@@ -71,6 +81,16 @@ export const fetchLeaveRequests = async (userId?: string) => {
   }
 
   const { data, error } = await query;
+  
+  if (error) throw error;
+  return data as LeaveRequest[];
+};
+
+export const fetchLeaveRequestsWithUserInfo = async () => {
+  const { data, error } = await supabase
+    .from('leave_requests')
+    .select('*')
+    .order('created_at', { ascending: false });
   
   if (error) throw error;
   return data as LeaveRequest[];
