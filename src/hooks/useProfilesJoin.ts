@@ -28,34 +28,37 @@ export const useProfilesJoin = (userIds: string[]) => {
       try {
         setIsLoading(true);
         
-        // Fetch user profiles
-        const promises = userIds.map(async (userId) => {
-          const { data: userData, error: userError } = await supabase.auth.admin.getUserById(userId);
-          
-          if (userError) throw userError;
-          
-          if (userData && userData.user) {
-            return {
-              id: userData.user.id,
-              email: userData.user.email,
-              username: userData.user.user_metadata?.username,
-              full_name: userData.user.user_metadata?.full_name,
-            } as UserProfile;
+        // Get unique user IDs to avoid duplicate requests
+        const uniqueUserIds = [...new Set(userIds)];
+        console.log('Fetching profiles for user IDs:', uniqueUserIds);
+        
+        // Get user data from Supabase Auth
+        const profileMap: Record<string, UserProfile> = {};
+        
+        for (const userId of uniqueUserIds) {
+          try {
+            // Try to get user information directly from auth metadata
+            const { data: userData, error: userError } = await supabase.auth.admin.getUserById(userId);
+            
+            if (userError) {
+              console.error(`Error fetching user ${userId}:`, userError);
+              continue;
+            }
+            
+            if (userData && userData.user) {
+              profileMap[userId] = {
+                id: userData.user.id,
+                email: userData.user.email,
+                username: userData.user.user_metadata?.username || userData.user.email?.split('@')[0],
+                full_name: userData.user.user_metadata?.full_name || 'User'
+              };
+            }
+          } catch (err) {
+            console.error(`Error processing user ${userId}:`, err);
           }
-          
-          return null;
-        });
+        }
         
-        const results = await Promise.all(promises);
-        
-        // Create a map of user ID to profile data
-        const profileMap = results.reduce((acc, profile) => {
-          if (profile) {
-            acc[profile.id] = profile;
-          }
-          return acc;
-        }, {} as Record<string, UserProfile>);
-        
+        console.log('Fetched profiles:', profileMap);
         setProfiles(profileMap);
       } catch (err) {
         console.error('Error fetching user profiles:', err);
