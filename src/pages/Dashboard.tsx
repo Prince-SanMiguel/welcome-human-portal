@@ -6,8 +6,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
-import { Users } from 'lucide-react';
+import { Users, UserPlus, Search } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import AddEmployeeForm from '@/components/dashboard/AddEmployeeForm';
+import SearchBar from '@/components/dashboard/SearchBar';
 
 // Define types for our data
 interface Employee {
@@ -51,16 +54,35 @@ const Dashboard = () => {
   const { signOut } = useAuth();
   const [loading, setLoading] = useState(true);
   const [employees, setEmployees] = useState<EmployeeWithDetails[]>([]);
+  const [filteredEmployees, setFilteredEmployees] = useState<EmployeeWithDetails[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [jobHistory, setJobHistory] = useState<JobHistory[]>([]);
   const [selectedEmployee, setSelectedEmployee] = useState<string | null>(null);
   const [showJobHistoryDialog, setShowJobHistoryDialog] = useState(false);
+  const [showAddEmployeeDialog, setShowAddEmployeeDialog] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const { toast } = useToast();
 
   useEffect(() => {
     fetchData();
   }, []);
+
+  useEffect(() => {
+    if (searchQuery.trim() === '') {
+      setFilteredEmployees(employees);
+    } else {
+      const lowerCaseQuery = searchQuery.toLowerCase();
+      const filtered = employees.filter(employee => 
+        employee.empno.toLowerCase().includes(lowerCaseQuery) ||
+        (employee.firstname && employee.firstname.toLowerCase().includes(lowerCaseQuery)) ||
+        (employee.lastname && employee.lastname.toLowerCase().includes(lowerCaseQuery)) ||
+        (employee.job && employee.job.toLowerCase().includes(lowerCaseQuery)) ||
+        (employee.department && employee.department.toLowerCase().includes(lowerCaseQuery))
+      );
+      setFilteredEmployees(filtered);
+    }
+  }, [searchQuery, employees]);
 
   const fetchData = async () => {
     try {
@@ -143,6 +165,7 @@ const Dashboard = () => {
       });
       
       setEmployees(employeesWithDetails || []);
+      setFilteredEmployees(employeesWithDetails || []);
       setJobHistory(jobHistoryWithDetails || []);
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -233,6 +256,26 @@ const Dashboard = () => {
           </Card>
         </div>
 
+        {/* Search and Add Employee Section */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-3">
+          <div className="relative w-full sm:w-auto">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search employees..."
+              className="pl-8 w-full sm:w-64 md:w-80"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
+          <Button 
+            className="flex items-center gap-2"
+            onClick={() => setShowAddEmployeeDialog(true)}
+          >
+            <UserPlus className="h-4 w-4" />
+            Add Employee
+          </Button>
+        </div>
+
         {/* Employee Table */}
         <Card className="mb-8">
           <CardHeader>
@@ -257,8 +300,8 @@ const Dashboard = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {employees.length > 0 ? (
-                    employees.map((employee) => (
+                  {filteredEmployees.length > 0 ? (
+                    filteredEmployees.map((employee) => (
                       <TableRow key={employee.empno}>
                         <TableCell className="font-medium">{employee.empno}</TableCell>
                         <TableCell>{`${employee.firstname || ''} ${employee.lastname || ''}`}</TableCell>
@@ -283,7 +326,7 @@ const Dashboard = () => {
                   ) : (
                     <TableRow>
                       <TableCell colSpan={8} className="text-center py-4">
-                        No employees found
+                        {searchQuery ? 'No matching employees found' : 'No employees found'}
                       </TableCell>
                     </TableRow>
                   )}
@@ -336,6 +379,13 @@ const Dashboard = () => {
             </div>
           </DialogContent>
         </Dialog>
+
+        {/* Add Employee Dialog */}
+        <AddEmployeeForm 
+          open={showAddEmployeeDialog} 
+          onOpenChange={setShowAddEmployeeDialog} 
+          onEmployeeAdded={fetchData}
+        />
       </main>
     </div>
   );
