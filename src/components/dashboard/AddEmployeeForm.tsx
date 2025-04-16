@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -75,10 +74,9 @@ const AddEmployeeForm = ({ open, onOpenChange, onEmployeeAdded }: AddEmployeeFor
       if (data && data.length > 0) {
         const lastId = data[0].empno;
         if (lastId && lastId.startsWith('EMP')) {
-          const numPart = lastId.substring(3);
-          const numValue = parseInt(numPart, 10);
-          if (!isNaN(numValue)) {
-            const newNum = numValue + 2;
+          const numPart = parseInt(lastId.substring(3), 10);
+          if (!isNaN(numPart)) {
+            const newNum = numPart + 2;
             newEmpNo = `EMP${newNum.toString().padStart(3, '0')}`;
           }
         }
@@ -110,7 +108,6 @@ const AddEmployeeForm = ({ open, onOpenChange, onEmployeeAdded }: AddEmployeeFor
     setLoading(true);
 
     try {
-      // Insert employee record
       const { data: employee, error: employeeError } = await supabase
         .from('employee')
         .insert([{
@@ -126,21 +123,19 @@ const AddEmployeeForm = ({ open, onOpenChange, onEmployeeAdded }: AddEmployeeFor
 
       if (employeeError) throw employeeError;
 
-      // Insert initial job history
       if (formData.empno) {
         const { error: jobHistoryError } = await supabase
           .from('jobhistory')
           .insert([{
             empno: formData.empno,
-            jobcode: 'NEW', // Default job code
-            deptcode: formData.department || 'TRAIN', // Use selected department or default
+            jobcode: 'NEW',
+            deptcode: formData.department || 'TRAIN',
             effdate: formData.hiredate,
-            salary: 0 // Default salary
+            salary: 0
           }]);
 
         if (jobHistoryError) {
           console.error('Error adding job history:', jobHistoryError);
-          // Continue anyway as the employee was added successfully
         }
       }
 
@@ -149,7 +144,6 @@ const AddEmployeeForm = ({ open, onOpenChange, onEmployeeAdded }: AddEmployeeFor
         description: `Successfully added ${formData.firstname} ${formData.lastname}`,
       });
 
-      // Reset form
       setFormData({
         empno: lastEmpNo,
         firstname: '',
@@ -160,7 +154,6 @@ const AddEmployeeForm = ({ open, onOpenChange, onEmployeeAdded }: AddEmployeeFor
         department: ''
       });
 
-      // Close modal and refresh data
       onOpenChange(false);
       onEmployeeAdded();
     } catch (error: any) {
