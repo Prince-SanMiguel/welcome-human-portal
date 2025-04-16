@@ -5,12 +5,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import FormError from '@/components/ui/FormError';
 import { useNavigate } from 'react-router-dom';
-import { EyeIcon, EyeOffIcon, UserIcon, BriefcaseIcon, ShieldCheckIcon } from 'lucide-react';
+import { EyeIcon, EyeOffIcon } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
-import { UserRole } from '@/context/AuthContext';
 
 const departments = [
   'Human Resources',
@@ -37,7 +35,6 @@ const SignupForm = () => {
     jobTitle: '',
     department: '',
     companyName: '',
-    role: 'employee' as UserRole,
   });
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -51,13 +48,6 @@ const SignupForm = () => {
     setFormData({
       ...formData,
       department: value,
-    });
-  };
-
-  const handleRoleChange = (value: UserRole) => {
-    setFormData({
-      ...formData,
-      role: value,
     });
   };
 
@@ -91,7 +81,6 @@ const SignupForm = () => {
             job_title: formData.jobTitle,
             department: formData.department,
             company_name: formData.companyName,
-            role: formData.role, // Store the role in user metadata
           },
         },
       });
@@ -192,49 +181,6 @@ const SignupForm = () => {
         <p className="text-xs text-gray-500">
           Must be at least 8 characters
         </p>
-      </div>
-      
-      <div className="space-y-3">
-        <Label>Select Your Role *</Label>
-        <RadioGroup 
-          defaultValue="employee" 
-          value={formData.role}
-          onValueChange={(value) => handleRoleChange(value as UserRole)}
-          className="grid grid-cols-1 sm:grid-cols-3 gap-2"
-        >
-          <div className="flex items-center space-x-2 border p-3 rounded-md hover:bg-gray-50 cursor-pointer">
-            <RadioGroupItem value="employee" id="employee" />
-            <Label htmlFor="employee" className="flex items-center cursor-pointer w-full">
-              <BriefcaseIcon className="h-4 w-4 mr-2 text-blue-500" />
-              <div>
-                <div>Employee</div>
-                <div className="text-xs text-gray-500">Regular staff member</div>
-              </div>
-            </Label>
-          </div>
-          
-          <div className="flex items-center space-x-2 border p-3 rounded-md hover:bg-gray-50 cursor-pointer">
-            <RadioGroupItem value="manager" id="manager" />
-            <Label htmlFor="manager" className="flex items-center cursor-pointer w-full">
-              <UserIcon className="h-4 w-4 mr-2 text-green-500" />
-              <div>
-                <div>Manager</div>
-                <div className="text-xs text-gray-500">Team leader access</div>
-              </div>
-            </Label>
-          </div>
-          
-          <div className="flex items-center space-x-2 border p-3 rounded-md hover:bg-gray-50 cursor-pointer">
-            <RadioGroupItem value="admin" id="admin" />
-            <Label htmlFor="admin" className="flex items-center cursor-pointer w-full">
-              <ShieldCheckIcon className="h-4 w-4 mr-2 text-purple-500" />
-              <div>
-                <div>Admin</div>
-                <div className="text-xs text-gray-500">Full system access</div>
-              </div>
-            </Label>
-          </div>
-        </RadioGroup>
       </div>
       
       <div className="space-y-2">

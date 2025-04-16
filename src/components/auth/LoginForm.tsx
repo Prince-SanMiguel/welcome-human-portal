@@ -53,10 +53,8 @@ const LoginForm = () => {
         description: 'Welcome back to HR Management System',
       });
 
-      // Add a small delay before navigation to ensure auth state is updated
-      setTimeout(() => {
-        navigate('/dashboard');
-      }, 500);
+      // Navigate to dashboard page instead of home
+      navigate('/dashboard');
       
     } catch (error: any) {
       console.error('Login error:', error);
