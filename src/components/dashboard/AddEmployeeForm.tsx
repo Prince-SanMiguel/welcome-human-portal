@@ -1,9 +1,10 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
@@ -13,21 +14,95 @@ interface AddEmployeeFormProps {
   onEmployeeAdded: () => void;
 }
 
+interface Department {
+  deptcode: string;
+  deptname: string | null;
+}
+
 const AddEmployeeForm = ({ open, onOpenChange, onEmployeeAdded }: AddEmployeeFormProps) => {
   const { toast } = useToast();
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [lastEmpNo, setLastEmpNo] = useState<string>('EMP000');
   const [formData, setFormData] = useState({
     empno: '',
     firstname: '',
     lastname: '',
     birthdate: '',
     hiredate: new Date().toISOString().split('T')[0],
-    gender: ''
+    gender: '',
+    department: ''
   });
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      fetchDepartments();
+      generateEmployeeId();
+    }
+  }, [open]);
+
+  const fetchDepartments = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('department')
+        .select('*')
+        .order('deptname');
+
+      if (error) throw error;
+      setDepartments(data || []);
+    } catch (error: any) {
+      console.error('Error fetching departments:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to load departments',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const generateEmployeeId = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('employee')
+        .select('empno')
+        .order('empno', { ascending: false })
+        .limit(1);
+
+      if (error) throw error;
+
+      let newEmpNo = 'EMP001';
+      
+      if (data && data.length > 0) {
+        const lastId = data[0].empno;
+        if (lastId && lastId.startsWith('EMP')) {
+          const numPart = lastId.substring(3);
+          const numValue = parseInt(numPart, 10);
+          if (!isNaN(numValue)) {
+            const newNum = numValue + 2;
+            newEmpNo = `EMP${newNum.toString().padStart(3, '0')}`;
+          }
+        }
+      }
+      
+      setFormData(prev => ({ ...prev, empno: newEmpNo }));
+      setLastEmpNo(newEmpNo);
+    } catch (error: any) {
+      console.error('Error generating employee ID:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to generate employee ID',
+        variant: 'destructive',
+      });
+    }
+  };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleDepartmentChange = (value: string) => {
+    setFormData(prev => ({ ...prev, department: value }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -38,20 +113,27 @@ const AddEmployeeForm = ({ open, onOpenChange, onEmployeeAdded }: AddEmployeeFor
       // Insert employee record
       const { data: employee, error: employeeError } = await supabase
         .from('employee')
-        .insert([formData])
+        .insert([{
+          empno: formData.empno,
+          firstname: formData.firstname,
+          lastname: formData.lastname,
+          birthdate: formData.birthdate,
+          hiredate: formData.hiredate,
+          gender: formData.gender
+        }])
         .select()
         .single();
 
       if (employeeError) throw employeeError;
 
-      // Insert initial job history if needed
+      // Insert initial job history
       if (formData.empno) {
         const { error: jobHistoryError } = await supabase
           .from('jobhistory')
           .insert([{
             empno: formData.empno,
             jobcode: 'NEW', // Default job code
-            deptcode: 'TRAIN', // Default department code
+            deptcode: formData.department || 'TRAIN', // Use selected department or default
             effdate: formData.hiredate,
             salary: 0 // Default salary
           }]);
@@ -69,12 +151,13 @@ const AddEmployeeForm = ({ open, onOpenChange, onEmployeeAdded }: AddEmployeeFor
 
       // Reset form
       setFormData({
-        empno: '',
+        empno: lastEmpNo,
         firstname: '',
         lastname: '',
         birthdate: '',
         hiredate: new Date().toISOString().split('T')[0],
-        gender: ''
+        gender: '',
+        department: ''
       });
 
       // Close modal and refresh data
@@ -104,14 +187,13 @@ const AddEmployeeForm = ({ open, onOpenChange, onEmployeeAdded }: AddEmployeeFor
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="empno">Employee ID</Label>
+              <Label htmlFor="empno">Employee ID (Auto-generated)</Label>
               <Input 
                 id="empno" 
                 name="empno" 
                 value={formData.empno} 
-                onChange={handleChange} 
-                placeholder="e.g. EMP001" 
-                required 
+                readOnly 
+                className="bg-gray-100"
               />
             </div>
             <div className="space-y-2">
@@ -167,6 +249,24 @@ const AddEmployeeForm = ({ open, onOpenChange, onEmployeeAdded }: AddEmployeeFor
                 onChange={handleChange} 
                 required 
               />
+            </div>
+            <div className="space-y-2 col-span-2">
+              <Label htmlFor="department">Department</Label>
+              <Select 
+                value={formData.department} 
+                onValueChange={handleDepartmentChange}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select Department" />
+                </SelectTrigger>
+                <SelectContent>
+                  {departments.map((dept) => (
+                    <SelectItem key={dept.deptcode} value={dept.deptcode}>
+                      {dept.deptname || dept.deptcode}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
           <div className="flex justify-end space-x-2">
