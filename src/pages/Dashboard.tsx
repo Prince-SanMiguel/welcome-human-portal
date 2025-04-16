@@ -6,7 +6,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
-import { Users, Briefcase, Building2, FileSpreadsheet } from 'lucide-react';
+import { Users } from 'lucide-react';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 // Define types for our data
 interface Employee {
@@ -53,6 +54,8 @@ const Dashboard = () => {
   const [departments, setDepartments] = useState<Department[]>([]);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [jobHistory, setJobHistory] = useState<JobHistory[]>([]);
+  const [selectedEmployee, setSelectedEmployee] = useState<string | null>(null);
+  const [showJobHistoryDialog, setShowJobHistoryDialog] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -174,6 +177,20 @@ const Dashboard = () => {
     return new Date(dateString).toLocaleDateString();
   };
 
+  const openJobHistory = (empno: string) => {
+    setSelectedEmployee(empno);
+    setShowJobHistoryDialog(true);
+  };
+
+  const getEmployeeJobHistory = () => {
+    return jobHistory.filter(history => history.empno === selectedEmployee);
+  };
+
+  const getEmployeeName = () => {
+    const employee = employees.find(emp => emp.empno === selectedEmployee);
+    return employee ? `${employee.firstname || ''} ${employee.lastname || ''}`.trim() : 'Employee';
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -199,7 +216,7 @@ const Dashboard = () => {
       </header>
 
       <main className="py-8 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-8">
+        <div className="grid grid-cols-1 gap-4 mb-8">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">
@@ -211,50 +228,6 @@ const Dashboard = () => {
               <div className="text-2xl font-bold">{employees.length}</div>
               <p className="text-xs text-muted-foreground">
                 Active workforce
-              </p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                Departments
-              </CardTitle>
-              <Building2 className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{departments.length}</div>
-              <p className="text-xs text-muted-foreground">
-                Company divisions
-              </p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                Job Positions
-              </CardTitle>
-              <Briefcase className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{jobs.length}</div>
-              <p className="text-xs text-muted-foreground">
-                Available roles
-              </p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                Job History Records
-              </CardTitle>
-              <FileSpreadsheet className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {jobHistory.length}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Employment records
               </p>
             </CardContent>
           </Card>
@@ -280,6 +253,7 @@ const Dashboard = () => {
                     <TableHead>Department</TableHead>
                     <TableHead>Position</TableHead>
                     <TableHead className="text-right">Salary</TableHead>
+                    <TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -295,11 +269,20 @@ const Dashboard = () => {
                         <TableCell className="text-right">
                           {employee.salary ? `$${employee.salary.toLocaleString()}` : 'N/A'}
                         </TableCell>
+                        <TableCell>
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={() => openJobHistory(employee.empno)}
+                          >
+                            View Job History
+                          </Button>
+                        </TableCell>
                       </TableRow>
                     ))
                   ) : (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center py-4">
+                      <TableCell colSpan={8} className="text-center py-4">
                         No employees found
                       </TableCell>
                     </TableRow>
@@ -310,104 +293,19 @@ const Dashboard = () => {
           </CardContent>
         </Card>
 
-        {/* Department Table */}
-        <Card className="mb-8">
-          <CardHeader>
-            <CardTitle>Departments</CardTitle>
-            <CardDescription>
-              List of company departments
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="rounded-md border">
+        {/* Job History Dialog */}
+        <Dialog open={showJobHistoryDialog} onOpenChange={setShowJobHistoryDialog}>
+          <DialogContent className="max-w-4xl">
+            <DialogHeader>
+              <DialogTitle>Job History for {getEmployeeName()}</DialogTitle>
+              <DialogDescription>
+                Employment records and position changes
+              </DialogDescription>
+            </DialogHeader>
+            <div className="rounded-md border mt-4">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Department Code</TableHead>
-                    <TableHead>Department Name</TableHead>
-                    <TableHead className="text-right">Employee Count</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {departments.length > 0 ? (
-                    departments.map((dept) => (
-                      <TableRow key={dept.deptcode}>
-                        <TableCell className="font-medium">{dept.deptcode}</TableCell>
-                        <TableCell>{dept.deptname || 'Unnamed'}</TableCell>
-                        <TableCell className="text-right">
-                          {employees.filter(e => e.department === dept.deptname).length}
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  ) : (
-                    <TableRow>
-                      <TableCell colSpan={3} className="text-center py-4">
-                        No departments found
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Jobs Table */}
-        <Card className="mb-8">
-          <CardHeader>
-            <CardTitle>Jobs</CardTitle>
-            <CardDescription>
-              List of available job positions
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="rounded-md border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Job Code</TableHead>
-                    <TableHead>Job Description</TableHead>
-                    <TableHead className="text-right">Employees Count</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {jobs.length > 0 ? (
-                    jobs.map((job) => (
-                      <TableRow key={job.jobcode}>
-                        <TableCell className="font-medium">{job.jobcode}</TableCell>
-                        <TableCell>{job.jobdesc || 'Unnamed'}</TableCell>
-                        <TableCell className="text-right">
-                          {employees.filter(e => e.job === job.jobdesc).length}
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  ) : (
-                    <TableRow>
-                      <TableCell colSpan={3} className="text-center py-4">
-                        No jobs found
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Job History Table */}
-        <Card className="mb-8">
-          <CardHeader>
-            <CardTitle>Job History</CardTitle>
-            <CardDescription>
-              Employment records and position changes
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="rounded-md border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Employee</TableHead>
                     <TableHead>Department</TableHead>
                     <TableHead>Position</TableHead>
                     <TableHead>Effective Date</TableHead>
@@ -415,10 +313,9 @@ const Dashboard = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {jobHistory.length > 0 ? (
-                    jobHistory.map((history, index) => (
+                  {getEmployeeJobHistory().length > 0 ? (
+                    getEmployeeJobHistory().map((history, index) => (
                       <TableRow key={`${history.empno}-${history.jobcode}-${history.effdate}-${index}`}>
-                        <TableCell className="font-medium">{history.employee_name} ({history.empno})</TableCell>
                         <TableCell>{history.dept_name}</TableCell>
                         <TableCell>{history.job_desc}</TableCell>
                         <TableCell>{formatDate(history.effdate)}</TableCell>
@@ -429,7 +326,7 @@ const Dashboard = () => {
                     ))
                   ) : (
                     <TableRow>
-                      <TableCell colSpan={5} className="text-center py-4">
+                      <TableCell colSpan={4} className="text-center py-4">
                         No job history records found
                       </TableCell>
                     </TableRow>
@@ -437,8 +334,8 @@ const Dashboard = () => {
                 </TableBody>
               </Table>
             </div>
-          </CardContent>
-        </Card>
+          </DialogContent>
+        </Dialog>
       </main>
     </div>
   );
