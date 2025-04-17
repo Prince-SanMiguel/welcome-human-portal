@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -8,8 +7,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { useToast } from '@/hooks/use-toast';
 import { Users } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import SearchBar, { FilterOptions } from '@/components/dashboard/SearchBar';
 
-// Define types for our data
 interface Employee {
   empno: string;
   firstname: string | null;
@@ -51,6 +50,7 @@ const Dashboard = () => {
   const { signOut } = useAuth();
   const [loading, setLoading] = useState(true);
   const [employees, setEmployees] = useState<EmployeeWithDetails[]>([]);
+  const [filteredEmployees, setFilteredEmployees] = useState<EmployeeWithDetails[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [jobHistory, setJobHistory] = useState<JobHistory[]>([]);
@@ -62,12 +62,15 @@ const Dashboard = () => {
     fetchData();
   }, []);
 
+  useEffect(() => {
+    setFilteredEmployees(employees);
+  }, [employees]);
+
   const fetchData = async () => {
     try {
       setLoading(true);
       console.log("Fetching dashboard data...");
       
-      // Fetch departments
       const { data: deptData, error: deptError } = await supabase
         .from('department')
         .select('*');
@@ -79,7 +82,6 @@ const Dashboard = () => {
       console.log("Departments loaded:", deptData?.length);
       setDepartments(deptData || []);
       
-      // Fetch jobs
       const { data: jobData, error: jobError } = await supabase
         .from('job')
         .select('*');
@@ -91,7 +93,6 @@ const Dashboard = () => {
       console.log("Jobs loaded:", jobData?.length);
       setJobs(jobData || []);
       
-      // Fetch employees
       const { data: empData, error: empError } = await supabase
         .from('employee')
         .select('*');
@@ -102,7 +103,6 @@ const Dashboard = () => {
       }
       console.log("Employees loaded:", empData?.length);
       
-      // Fetch job history
       const { data: historyData, error: historyError } = await supabase
         .from('jobhistory')
         .select('*')
@@ -114,7 +114,6 @@ const Dashboard = () => {
       }
       console.log("Job history records loaded:", historyData?.length);
       
-      // Combine data to get employees with their current position details
       const employeesWithDetails = empData?.map((emp) => {
         const latestJob = historyData?.find(h => h.empno === emp.empno);
         const jobInfo = jobData?.find(j => j.jobcode === latestJob?.jobcode);
@@ -128,7 +127,6 @@ const Dashboard = () => {
         };
       });
       
-      // Add employee, job, and department names to job history records
       const jobHistoryWithDetails = historyData?.map((hist) => {
         const empInfo = empData?.find(e => e.empno === hist.empno);
         const jobInfo = jobData?.find(j => j.jobcode === hist.jobcode);
@@ -154,6 +152,40 @@ const Dashboard = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleFilterChange = (filters: FilterOptions) => {
+    let filtered = [...employees];
+    
+    if (filters.searchQuery) {
+      const query = filters.searchQuery.toLowerCase();
+      filtered = filtered.filter(emp => 
+        emp.empno.toLowerCase().includes(query) ||
+        `${emp.firstname || ''} ${emp.lastname || ''}`.toLowerCase().includes(query) ||
+        (emp.job && emp.job.toLowerCase().includes(query)) ||
+        (emp.department && emp.department.toLowerCase().includes(query))
+      );
+    }
+    
+    if (filters.department) {
+      filtered = filtered.filter(emp => 
+        emp.department?.toLowerCase() === filters.department.toLowerCase()
+      );
+    }
+    
+    if (filters.job) {
+      filtered = filtered.filter(emp => 
+        emp.job?.toLowerCase() === filters.job.toLowerCase()
+      );
+    }
+    
+    if (filters.gender) {
+      filtered = filtered.filter(emp => 
+        emp.gender === filters.gender
+      );
+    }
+    
+    setFilteredEmployees(filtered);
   };
 
   const handleSignOut = async () => {
@@ -233,7 +265,12 @@ const Dashboard = () => {
           </Card>
         </div>
 
-        {/* Employee Table */}
+        <SearchBar 
+          departments={departments}
+          jobs={jobs}
+          onFilterChange={handleFilterChange}
+        />
+
         <Card className="mb-8">
           <CardHeader>
             <CardTitle>Employee Directory</CardTitle>
@@ -257,8 +294,8 @@ const Dashboard = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {employees.length > 0 ? (
-                    employees.map((employee) => (
+                  {filteredEmployees.length > 0 ? (
+                    filteredEmployees.map((employee) => (
                       <TableRow key={employee.empno}>
                         <TableCell className="font-medium">{employee.empno}</TableCell>
                         <TableCell>{`${employee.firstname || ''} ${employee.lastname || ''}`}</TableCell>
@@ -293,7 +330,6 @@ const Dashboard = () => {
           </CardContent>
         </Card>
 
-        {/* Job History Dialog */}
         <Dialog open={showJobHistoryDialog} onOpenChange={setShowJobHistoryDialog}>
           <DialogContent className="max-w-4xl">
             <DialogHeader>
