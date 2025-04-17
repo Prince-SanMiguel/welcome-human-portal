@@ -1,4 +1,3 @@
-
 import * as React from "react"
 
 import { cn } from "@/lib/utils"
@@ -106,20 +105,6 @@ const TableCaption = React.forwardRef<
 ))
 TableCaption.displayName = "TableCaption"
 
-const TableEmpty = React.forwardRef<
-  HTMLTableRowElement,
-  React.HTMLAttributes<HTMLTableRowElement> & { colSpan?: number; message?: string }
->(({ className, colSpan = 1, message = "No data available", ...props }, ref) => (
-  <TableRow ref={ref} className={cn("text-center", className)} {...props}>
-    <TableCell colSpan={colSpan} className="h-24 text-center">
-      <div className="flex flex-col items-center justify-center">
-        <p className="text-sm text-muted-foreground">{message}</p>
-      </div>
-    </TableCell>
-  </TableRow>
-))
-TableEmpty.displayName = "TableEmpty"
-
 export {
   Table,
   TableHeader,
@@ -129,5 +114,4 @@ export {
   TableRow,
   TableCell,
   TableCaption,
-  TableEmpty,
 }
