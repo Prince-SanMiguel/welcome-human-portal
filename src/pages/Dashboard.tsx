@@ -263,9 +263,12 @@ const Dashboard = () => {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Employee ID</TableHead>
-                    <TableHead>Name</TableHead>
+                    <TableHead>Last Name</TableHead>
+                    <TableHead>First Name</TableHead>
                     <TableHead>Gender</TableHead>
+                    <TableHead>Birth Date</TableHead>
                     <TableHead>Hire Date</TableHead>
+                    <TableHead>Separation Date</TableHead>
                     <TableHead>Department</TableHead>
                     <TableHead>Position</TableHead>
                     <TableHead className="text-right">Salary</TableHead>
@@ -277,9 +280,12 @@ const Dashboard = () => {
                     employees.map((employee) => (
                       <TableRow key={employee.empno}>
                         <TableCell className="font-medium">{employee.empno}</TableCell>
-                        <TableCell>{`${employee.firstname || ''} ${employee.lastname || ''}`}</TableCell>
+                        <TableCell>{employee.lastname || 'N/A'}</TableCell>
+                        <TableCell>{employee.firstname || 'N/A'}</TableCell>
                         <TableCell>{employee.gender || 'N/A'}</TableCell>
+                        <TableCell>{formatDate(employee.birthdate)}</TableCell>
                         <TableCell>{formatDate(employee.hiredate)}</TableCell>
+                        <TableCell>{formatDate(employee.sepdate)}</TableCell>
                         <TableCell>{employee.department}</TableCell>
                         <TableCell>{employee.job}</TableCell>
                         <TableCell className="text-right">
@@ -307,7 +313,7 @@ const Dashboard = () => {
                               className="text-red-500 hover:text-red-700 hover:bg-red-50"
                               onClick={() => openDeleteDialog(
                                 employee.empno, 
-                                `${employee.firstname || ''} ${employee.lastname || ''}`.trim()
+                                `${employee.lastname || ''}, ${employee.firstname || ''}`.trim()
                               )}
                             >
                               <Trash2 className="h-4 w-4" />
@@ -318,7 +324,7 @@ const Dashboard = () => {
                     ))
                   ) : (
                     <TableRow>
-                      <TableCell colSpan={8} className="text-center py-4">
+                      <TableCell colSpan={11} className="text-center py-4">
                         No employees found
                       </TableCell>
                     </TableRow>
