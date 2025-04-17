@@ -8,7 +8,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { useToast } from '@/hooks/use-toast';
 import { Users } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import SearchBar, { FilterOptions } from '@/components/dashboard/SearchBar';
 
 // Define types for our data
 interface Employee {
@@ -52,7 +51,6 @@ const Dashboard = () => {
   const { signOut } = useAuth();
   const [loading, setLoading] = useState(true);
   const [employees, setEmployees] = useState<EmployeeWithDetails[]>([]);
-  const [filteredEmployees, setFilteredEmployees] = useState<EmployeeWithDetails[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [jobHistory, setJobHistory] = useState<JobHistory[]>([]);
@@ -63,11 +61,6 @@ const Dashboard = () => {
   useEffect(() => {
     fetchData();
   }, []);
-
-  // Update filtered employees whenever employees data changes
-  useEffect(() => {
-    setFilteredEmployees(employees);
-  }, [employees]);
 
   const fetchData = async () => {
     try {
@@ -150,7 +143,6 @@ const Dashboard = () => {
       });
       
       setEmployees(employeesWithDetails || []);
-      setFilteredEmployees(employeesWithDetails || []);
       setJobHistory(jobHistoryWithDetails || []);
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -162,45 +154,6 @@ const Dashboard = () => {
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleFilterChange = (filters: FilterOptions) => {
-    let filtered = [...employees];
-    
-    // Filter by search query (searches in employee name, position, and department)
-    if (filters.searchQuery) {
-      const query = filters.searchQuery.toLowerCase();
-      filtered = filtered.filter(emp => 
-        (emp.firstname?.toLowerCase().includes(query) || '') ||
-        (emp.lastname?.toLowerCase().includes(query) || '') ||
-        (emp.job?.toLowerCase().includes(query) || '') ||
-        (emp.department?.toLowerCase().includes(query) || '') ||
-        emp.empno.toLowerCase().includes(query)
-      );
-    }
-    
-    // Filter by department
-    if (filters.department) {
-      filtered = filtered.filter(emp => 
-        emp.department?.toLowerCase() === filters.department.toLowerCase()
-      );
-    }
-    
-    // Filter by job
-    if (filters.job) {
-      filtered = filtered.filter(emp => 
-        emp.job?.toLowerCase() === filters.job.toLowerCase()
-      );
-    }
-    
-    // Filter by gender
-    if (filters.gender) {
-      filtered = filtered.filter(emp => 
-        emp.gender === filters.gender
-      );
-    }
-    
-    setFilteredEmployees(filtered);
   };
 
   const handleSignOut = async () => {
@@ -280,13 +233,6 @@ const Dashboard = () => {
           </Card>
         </div>
 
-        {/* SearchBar Component */}
-        <SearchBar 
-          departments={departments} 
-          jobs={jobs} 
-          onFilterChange={handleFilterChange} 
-        />
-
         {/* Employee Table */}
         <Card className="mb-8">
           <CardHeader>
@@ -311,8 +257,8 @@ const Dashboard = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredEmployees.length > 0 ? (
-                    filteredEmployees.map((employee) => (
+                  {employees.length > 0 ? (
+                    employees.map((employee) => (
                       <TableRow key={employee.empno}>
                         <TableCell className="font-medium">{employee.empno}</TableCell>
                         <TableCell>{`${employee.firstname || ''} ${employee.lastname || ''}`}</TableCell>
