@@ -6,8 +6,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
-import { Users } from 'lucide-react';
+import { Users, Edit, Trash2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import EditEmployeeDialog from '@/components/employee/EditEmployeeDialog';
+import DeleteConfirmationDialog from '@/components/employee/DeleteConfirmationDialog';
 
 // Define types for our data
 interface Employee {
@@ -56,6 +58,10 @@ const Dashboard = () => {
   const [jobHistory, setJobHistory] = useState<JobHistory[]>([]);
   const [selectedEmployee, setSelectedEmployee] = useState<string | null>(null);
   const [showJobHistoryDialog, setShowJobHistoryDialog] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [employeeToEdit, setEmployeeToEdit] = useState<Employee | null>(null);
+  const [employeeToDelete, setEmployeeToDelete] = useState<{id: string, name: string} | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -182,6 +188,16 @@ const Dashboard = () => {
     setShowJobHistoryDialog(true);
   };
 
+  const openEditDialog = (employee: Employee) => {
+    setEmployeeToEdit(employee);
+    setEditDialogOpen(true);
+  };
+
+  const openDeleteDialog = (id: string, name: string) => {
+    setEmployeeToDelete({ id, name });
+    setDeleteDialogOpen(true);
+  };
+
   const getEmployeeJobHistory = () => {
     return jobHistory.filter(history => history.empno === selectedEmployee);
   };
@@ -270,13 +286,33 @@ const Dashboard = () => {
                           {employee.salary ? `$${employee.salary.toLocaleString()}` : 'N/A'}
                         </TableCell>
                         <TableCell>
-                          <Button 
-                            variant="outline" 
-                            size="sm" 
-                            onClick={() => openJobHistory(employee.empno)}
-                          >
-                            View Job History
-                          </Button>
+                          <div className="flex space-x-2">
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              onClick={() => openJobHistory(employee.empno)}
+                            >
+                              View History
+                            </Button>
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              onClick={() => openEditDialog(employee)}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                              onClick={() => openDeleteDialog(
+                                employee.empno, 
+                                `${employee.firstname || ''} ${employee.lastname || ''}`.trim()
+                              )}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))
@@ -336,6 +372,23 @@ const Dashboard = () => {
             </div>
           </DialogContent>
         </Dialog>
+
+        {/* Edit Employee Dialog */}
+        <EditEmployeeDialog 
+          employee={employeeToEdit}
+          open={editDialogOpen}
+          onOpenChange={setEditDialogOpen}
+          onEmployeeUpdated={fetchData}
+        />
+
+        {/* Delete Confirmation Dialog */}
+        <DeleteConfirmationDialog
+          employeeId={employeeToDelete?.id || null}
+          employeeName={employeeToDelete?.name || ''}
+          open={deleteDialogOpen}
+          onOpenChange={setDeleteDialogOpen}
+          onEmployeeDeleted={fetchData}
+        />
       </main>
     </div>
   );
